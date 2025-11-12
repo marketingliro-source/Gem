@@ -11,7 +11,7 @@ const Logo = ({ size = 40, collapsed = false }) => {
     }}>
       <img
         src={logoImg}
-        alt="France Eco Energie Logo"
+        alt="Eco Habitat Consulting Logo"
         style={{
           width: size,
           height: size,
@@ -23,14 +23,14 @@ const Logo = ({ size = 40, collapsed = false }) => {
         <span style={{
           fontSize: size * 0.43,
           fontWeight: '700',
-          background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+          background: 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
           backgroundClip: 'text',
           letterSpacing: '0.8px',
           whiteSpace: 'nowrap'
         }}>
-          FRANCE ÉCOÉNERGIE
+          ECO HABITAT CONSULTING
         </span>
       )}
     </div>

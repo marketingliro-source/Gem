@@ -4,14 +4,13 @@ Ce dossier contient les ressources utilisées pour la génération des PDFs de d
 
 ## 1. Logo de la société
 
-**Fichier requis** : `logo.png`
+**Fichier actuel** : `logo-ehc.jpg` ✅ (déjà ajouté)
 
-Pour ajouter le logo de FRANCE ECO ENERGIE dans les PDFs :
+Le logo d'Eco Habitat Consulting est utilisé dans les PDFs :
 
-1. Placer le fichier logo au format PNG dans ce dossier
-2. Le nommer exactement : `logo.png`
-3. Format recommandé : PNG transparent, dimensions idéales 400x200px ou ratio similaire
-4. Le logo apparaîtra en haut à gauche de chaque PDF généré
+1. Format : JPG
+2. Le logo apparaît en haut à gauche de chaque PDF généré
+3. Pour changer le logo, remplacer le fichier `logo-ehc.jpg`
 
 ## 2. Carte des zones climatiques de France
 
@@ -19,7 +18,7 @@ Pour ajouter le logo de FRANCE ECO ENERGIE dans les PDFs :
 
 Pour mettre à jour la carte de France avec les zones climatiques :
 
-1. Ouvrir le fichier Excel : `Note de Dimensionnement FRANCE ECO ENERGY_unlocked.xlsx`
+1. Ouvrir le fichier Excel : `Note de Dimensionnement_unlocked.xlsx`
 2. Localiser l'image de la carte de France avec les zones climatiques (A, B, C, D, E, F, G, H, I)
 3. Faire un clic droit sur l'image → Enregistrer en tant qu'image
 4. Sauvegarder l'image sous le nom : `france-climate-zones.png`
@@ -27,19 +26,16 @@ Pour mettre à jour la carte de France avec les zones climatiques :
 
 ## 3. Informations de la société
 
-Les informations de la société (adresse, téléphone, email, SIRET) sont à mettre à jour dans le fichier :
+Les informations d'Eco Habitat Consulting sont déjà configurées dans :
 `/backend/src/routes/dimensioning.js`
-
-Chercher la section `companyInfo` (environ ligne 273) et remplacer les valeurs par défaut :
 
 ```javascript
 const companyInfo = {
-  name: 'FRANCE ECO ENERGIE',
-  address: 'Adresse de la société',
-  postalCode: 'Code postal',
-  city: 'Ville',
-  phone: 'Téléphone',
-  email: 'contact@france-eco-energie.fr',
-  siret: 'SIRET: XXXXX'
+  name: 'Eco Habitat Consulting',
+  address: '42 Chemin Moulin Carron',
+  postalCode: '69130',
+  city: 'Ecully',
+  phone: '04 51 68 09 45',
+  email: 'etude@consulting-ehc.fr'
 };
 ```

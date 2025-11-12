@@ -416,7 +416,7 @@ async function generatePDF(noteId, client, data, calculations) {
       // Pied de page
       doc.fillColor('#666').fontSize(9);
       doc.moveDown(3);
-      doc.text('France Eco Energie - Note de dimensionnement v1.0', { align: 'center' });
+      doc.text('Eco Habitat Consulting - Note de dimensionnement v1.0', { align: 'center' });
       doc.text(`Générée le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`, { align: 'center' });
 
       doc.end();
