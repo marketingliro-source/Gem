@@ -45,26 +45,35 @@ cd /var/www
 git clone https://github.com/ECOHABITATCONSULTING/crmecohabitat.git
 echo -e "${GREEN}✅ Repository cloné${NC}"
 
+# Déterminer l'utilisateur non-root
+REAL_USER=${SUDO_USER:-ubuntu}
+echo -e "${BLUE}🔧 Configuration des permissions pour l'utilisateur ${REAL_USER}...${NC}"
+chown -R ${REAL_USER}:${REAL_USER} /var/www/crmecohabitat
+echo -e "${GREEN}✅ Permissions configurées${NC}"
+
+echo -e "${BLUE}🌐 Configuration de Nginx...${NC}"
+# Désactiver la config par défaut
+rm -f /etc/nginx/sites-enabled/default
+# Copier et activer la config CRM
+cp /var/www/crmecohabitat/nginx.conf /etc/nginx/sites-available/crm
+ln -sf /etc/nginx/sites-available/crm /etc/nginx/sites-enabled/
+nginx -t
+systemctl restart nginx
+echo -e "${GREEN}✅ Nginx configuré${NC}"
+
 echo -e "${YELLOW}⚠️  Configuration manuelle requise:${NC}"
 echo ""
 echo "1. Créer le fichier .env dans backend:"
 echo "   cd /var/www/crmecohabitat/backend"
 echo "   nano .env"
 echo ""
-echo "   Contenu du .env:"
+echo "   Contenu minimal du .env:"
 echo "   PORT=5001"
-echo "   JWT_SECRET=votre_secret_tres_securise_ici_changez_moi"
+echo "   JWT_SECRET=$(openssl rand -base64 32)"
 echo "   NODE_ENV=production"
 echo ""
-echo "2. Copier la configuration Nginx:"
-echo "   cp /var/www/crmecohabitat/nginx.conf /etc/nginx/sites-available/crm"
-echo "   ln -s /etc/nginx/sites-available/crm /etc/nginx/sites-enabled/"
-echo "   nginx -t"
-echo "   systemctl restart nginx"
-echo ""
-echo "3. Lancer le premier déploiement:"
+echo "2. Lancer le premier déploiement:"
 echo "   cd /var/www/crmecohabitat"
-echo "   chmod +x deploy.sh"
 echo "   ./deploy.sh"
 echo ""
 echo -e "${GREEN}✅ Installation système terminée !${NC}"
