@@ -1,0 +1,141 @@
+.container {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 32px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  border-bottom: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.metricSelector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.metricLabel {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.metricSelect {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #e5e5e5;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 200px;
+}
+
+.metricSelect:hover {
+  background: #222;
+  border-color: #444;
+}
+
+.metricSelect:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.legendItem:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--agent-color);
+}
+
+.legendItemDisabled {
+  opacity: 0.4;
+  background: transparent;
+}
+
+.legendItemDisabled:hover {
+  opacity: 0.6;
+}
+
+.legendDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--agent-color);
+  flex-shrink: 0;
+}
+
+.chartContainer {
+  padding: 24px;
+}
+
+.empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+  font-size: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 20px;
+  }
+
+  .legend {
+    gap: 8px;
+  }
+
+  .legendItem {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .chartContainer {
+    padding: 16px;
+  }
+}
