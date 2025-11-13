@@ -7,7 +7,7 @@ const router = express.Router();
 // Récupérer les clients (filtrage selon le rôle)
 router.get('/', authenticateToken, (req, res) => {
   try {
-    const { page = 1, limit = 20, search, status } = req.query;
+    const { page = 1, limit = 20, search, statut, type_produit, code_naf } = req.query;
     const offset = (page - 1) * limit;
 
     let query = 'SELECT clients.*, users.username as assigned_username FROM clients LEFT JOIN users ON clients.assigned_to = users.id';
@@ -15,21 +15,33 @@ router.get('/', authenticateToken, (req, res) => {
     let params = [];
     let conditions = [];
 
-    // Si agent, voir seulement ses clients
-    if (req.user.role === 'agent') {
+    // Si télépro, voir seulement ses clients
+    if (req.user.role === 'telepro') {
       conditions.push('assigned_to = ?');
       params.push(req.user.id);
     }
 
     // Filtrer par statut
-    if (status) {
-      conditions.push('status = ?');
-      params.push(status);
+    if (statut) {
+      conditions.push('statut = ?');
+      params.push(statut);
     }
 
-    // Recherche par nom, téléphone, email, ville
+    // Filtrer par type de produit
+    if (type_produit) {
+      conditions.push('type_produit = ?');
+      params.push(type_produit);
+    }
+
+    // Filtrer par code NAF
+    if (code_naf) {
+      conditions.push('code_naf LIKE ?');
+      params.push(`%${code_naf}%`);
+    }
+
+    // Recherche par société, téléphone, adresse, nom signataire, SIRET
     if (search) {
-      conditions.push('(first_name LIKE ? OR last_name LIKE ? OR phone LIKE ? OR email LIKE ? OR city LIKE ?)');
+      conditions.push('(societe LIKE ? OR telephone LIKE ? OR adresse LIKE ? OR nom_signataire LIKE ? OR siret LIKE ?)');
       const searchTerm = `%${search}%`;
       params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
     }
@@ -44,13 +56,19 @@ router.get('/', authenticateToken, (req, res) => {
     const clients = db.prepare(query).all(...params, parseInt(limit), offset);
     const total = db.prepare(countQuery).get(...params).total;
 
+    // Parse les données techniques JSON pour chaque client
+    const clientsWithParsedData = clients.map(client => ({
+      ...client,
+      donnees_techniques: client.donnees_techniques ? JSON.parse(client.donnees_techniques) : null
+    }));
+
     // Si c'est une recherche, retourner directement le tableau
     if (search) {
-      return res.json(clients);
+      return res.json(clientsWithParsedData);
     }
 
     res.json({
-      clients,
+      clients: clientsWithParsedData,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -73,6 +91,11 @@ router.get('/:id', authenticateToken, (req, res) => {
       return res.status(404).json({ error: 'Client non trouvé' });
     }
 
+    // Parse les données techniques JSON
+    if (client.donnees_techniques) {
+      client.donnees_techniques = JSON.parse(client.donnees_techniques);
+    }
+
     res.json(client);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -82,25 +105,48 @@ router.get('/:id', authenticateToken, (req, res) => {
 // Créer un client
 router.post('/', authenticateToken, (req, res) => {
   try {
-    const { first_name, last_name, email, phone, address, city, postal_code } = req.body;
+    const {
+      // Bénéficiaire
+      societe, adresse, code_postal, telephone, siret,
+      // Site Travaux
+      nom_site, adresse_travaux, code_postal_travaux,
+      // Contact Signataire
+      nom_signataire, fonction, telephone_signataire, mail_signataire,
+      // Produit et données
+      type_produit, donnees_techniques,
+      // Code NAF
+      code_naf
+    } = req.body;
 
-    if (!first_name || !last_name) {
-      return res.status(400).json({ error: 'Nom et prénom requis' });
+    if (!type_produit) {
+      return res.status(400).json({ error: 'Type de produit requis' });
     }
 
-    const result = db.prepare(
-      'INSERT INTO clients (first_name, last_name, email, phone, address, city, postal_code, assigned_to) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(first_name, last_name, email, phone, address, city, postal_code, req.user.id);
+    // Stringify les données techniques si présentes
+    const donneesJSON = donnees_techniques ? JSON.stringify(donnees_techniques) : null;
+
+    const result = db.prepare(`
+      INSERT INTO clients (
+        societe, adresse, code_postal, telephone, siret,
+        nom_site, adresse_travaux, code_postal_travaux,
+        nom_signataire, fonction, telephone_signataire, mail_signataire,
+        type_produit, donnees_techniques, code_naf,
+        assigned_to
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      societe, adresse, code_postal, telephone, siret,
+      nom_site, adresse_travaux, code_postal_travaux,
+      nom_signataire, fonction, telephone_signataire, mail_signataire,
+      type_produit, donneesJSON, code_naf,
+      req.user.id
+    );
 
     res.status(201).json({
       id: result.lastInsertRowid,
-      first_name,
-      last_name,
-      email,
-      phone,
-      address,
-      city,
-      postal_code
+      societe,
+      type_produit,
+      nom_signataire,
+      statut: 'nouveau'
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -112,71 +158,53 @@ router.patch('/:id', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
     const {
-      first_name, last_name, email, phone, address, city, postal_code,
-      mail_sent, mail_sent_date, document_received, document_received_date,
-      cancelled, cancelled_date, landline_phone, mobile_phone
+      // Bénéficiaire
+      societe, adresse, code_postal, telephone, siret,
+      // Site Travaux
+      nom_site, adresse_travaux, code_postal_travaux,
+      // Contact Signataire
+      nom_signataire, fonction, telephone_signataire, mail_signataire,
+      // Produit et données
+      type_produit, donnees_techniques,
+      // Code NAF
+      code_naf,
+      // Statut
+      statut
     } = req.body;
 
     const updates = [];
     const params = [];
 
-    if (first_name) { updates.push('first_name = ?'); params.push(first_name); }
-    if (last_name) { updates.push('last_name = ?'); params.push(last_name); }
-    if (email !== undefined) { updates.push('email = ?'); params.push(email); }
-    if (phone !== undefined) { updates.push('phone = ?'); params.push(phone); }
-    if (address !== undefined) { updates.push('address = ?'); params.push(address); }
-    if (city !== undefined) { updates.push('city = ?'); params.push(city); }
-    if (postal_code !== undefined) { updates.push('postal_code = ?'); params.push(postal_code); }
+    // Bénéficiaire
+    if (societe !== undefined) { updates.push('societe = ?'); params.push(societe); }
+    if (adresse !== undefined) { updates.push('adresse = ?'); params.push(adresse); }
+    if (code_postal !== undefined) { updates.push('code_postal = ?'); params.push(code_postal); }
+    if (telephone !== undefined) { updates.push('telephone = ?'); params.push(telephone); }
+    if (siret !== undefined) { updates.push('siret = ?'); params.push(siret); }
 
-    // Tracking fields
-    if (mail_sent !== undefined) {
-      updates.push('mail_sent = ?');
-      params.push(mail_sent ? 1 : 0);
-      if (mail_sent) {
-        updates.push('mail_sent_date = ?');
-        params.push(mail_sent_date || new Date().toISOString().split('T')[0]);
-      }
+    // Site Travaux
+    if (nom_site !== undefined) { updates.push('nom_site = ?'); params.push(nom_site); }
+    if (adresse_travaux !== undefined) { updates.push('adresse_travaux = ?'); params.push(adresse_travaux); }
+    if (code_postal_travaux !== undefined) { updates.push('code_postal_travaux = ?'); params.push(code_postal_travaux); }
+
+    // Contact Signataire
+    if (nom_signataire !== undefined) { updates.push('nom_signataire = ?'); params.push(nom_signataire); }
+    if (fonction !== undefined) { updates.push('fonction = ?'); params.push(fonction); }
+    if (telephone_signataire !== undefined) { updates.push('telephone_signataire = ?'); params.push(telephone_signataire); }
+    if (mail_signataire !== undefined) { updates.push('mail_signataire = ?'); params.push(mail_signataire); }
+
+    // Produit et données
+    if (type_produit !== undefined) { updates.push('type_produit = ?'); params.push(type_produit); }
+    if (donnees_techniques !== undefined) {
+      updates.push('donnees_techniques = ?');
+      params.push(JSON.stringify(donnees_techniques));
     }
-    if (document_received !== undefined) {
-      updates.push('document_received = ?');
-      params.push(document_received ? 1 : 0);
-      if (document_received) {
-        updates.push('document_received_date = ?');
-        params.push(document_received_date || new Date().toISOString().split('T')[0]);
-      }
-    }
-    if (cancelled !== undefined) {
-      updates.push('cancelled = ?');
-      params.push(cancelled ? 1 : 0);
-      if (cancelled) {
-        updates.push('cancelled_date = ?');
-        params.push(cancelled_date || new Date().toISOString().split('T')[0]);
-      }
-    }
-    if (landline_phone !== undefined) { updates.push('landline_phone = ?'); params.push(landline_phone); }
-    if (mobile_phone !== undefined) { updates.push('mobile_phone = ?'); params.push(mobile_phone); }
 
-    // Auto-update status based on tracking checkboxes
-    if (cancelled !== undefined || document_received !== undefined || mail_sent !== undefined) {
-      // Récupérer l'état actuel du client pour déterminer le nouveau statut
-      const currentClient = db.prepare('SELECT mail_sent, document_received, cancelled FROM clients WHERE id = ?').get(id);
+    // Code NAF
+    if (code_naf !== undefined) { updates.push('code_naf = ?'); params.push(code_naf); }
 
-      const finalCancelled = cancelled !== undefined ? cancelled : currentClient.cancelled;
-      const finalDocumentReceived = document_received !== undefined ? document_received : currentClient.document_received;
-      const finalMailSent = mail_sent !== undefined ? mail_sent : currentClient.mail_sent;
-
-      let newStatus = 'nouveau';
-      if (finalCancelled) {
-        newStatus = 'annule';
-      } else if (finalDocumentReceived) {
-        newStatus = 'documents_recus';
-      } else if (finalMailSent) {
-        newStatus = 'mail_envoye';
-      }
-
-      updates.push('status = ?');
-      params.push(newStatus);
-    }
+    // Statut
+    if (statut !== undefined) { updates.push('statut = ?'); params.push(statut); }
 
     if (updates.length === 0) {
       return res.status(400).json({ error: 'Aucune donnée à mettre à jour' });
@@ -188,6 +216,12 @@ router.patch('/:id', authenticateToken, (req, res) => {
     db.prepare(`UPDATE clients SET ${updates.join(', ')} WHERE id = ?`).run(...params);
 
     const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(id);
+
+    // Parse les données techniques
+    if (client.donnees_techniques) {
+      client.donnees_techniques = JSON.parse(client.donnees_techniques);
+    }
+
     res.json(client);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -200,49 +234,6 @@ router.delete('/:id', authenticateToken, (req, res) => {
     const { id } = req.params;
     db.prepare('DELETE FROM clients WHERE id = ?').run(id);
     res.json({ message: 'Client supprimé' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Convertir un lead en client
-router.post('/convert-from-lead/:leadId', authenticateToken, async (req, res) => {
-  try {
-    const { leadId } = req.params;
-
-    // Récupérer le lead
-    const lead = db.prepare('SELECT * FROM leads WHERE id = ?').get(leadId);
-    if (!lead) {
-      return res.status(404).json({ error: 'Lead non trouvé' });
-    }
-
-    // Créer le client avec mapping des champs téléphone
-    const result = db.prepare(
-      'INSERT INTO clients (first_name, last_name, email, landline_phone, mobile_phone, address, assigned_to, converted_from_lead_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(lead.first_name, lead.last_name, lead.email, lead.phone, lead.mobile_phone, lead.address, lead.assigned_to, leadId);
-
-    const clientId = result.lastInsertRowid;
-
-    // Copier les commentaires
-    const comments = db.prepare('SELECT * FROM comments WHERE lead_id = ?').all(leadId);
-    for (const comment of comments) {
-      db.prepare('INSERT INTO client_comments (client_id, user_id, content, created_at) VALUES (?, ?, ?, ?)').run(
-        clientId, comment.user_id, comment.content, comment.created_at
-      );
-    }
-
-    // Copier les rendez-vous
-    const appointments = db.prepare('SELECT * FROM appointments WHERE lead_id = ?').all(leadId);
-    for (const appointment of appointments) {
-      db.prepare('INSERT INTO client_appointments (client_id, user_id, title, date, time, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-        clientId, appointment.user_id, appointment.title, appointment.date, appointment.time, appointment.created_at
-      );
-    }
-
-    // Supprimer le lead
-    db.prepare('DELETE FROM leads WHERE id = ?').run(leadId);
-
-    res.json({ message: 'Lead converti en client', clientId });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

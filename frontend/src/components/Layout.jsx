@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
-import { Home, Users, Calendar, LogOut, Menu, X, Settings, UserCheck, BarChart2, ChevronDown, ChevronRight, Database, List } from 'lucide-react';
+import { Users, Calendar, LogOut, Menu, X, UserCheck, BarChart2, ChevronDown, ChevronRight, Fan, Wind, Layers, Search } from 'lucide-react';
 import styles from './Layout.module.css';
 
 const Layout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [clientsOpen, setClientsOpen] = useState(false);
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -18,23 +18,23 @@ const Layout = ({ children }) => {
   };
 
   const navItems = [
-    { path: '/dashboard', icon: BarChart2, label: 'Dashboard', roles: ['admin', 'agent'], color: '#3b82f6' },
-    { path: '/clients', icon: UserCheck, label: 'Clients', roles: ['admin', 'agent'], color: '#10b981' },
-    { path: '/leads', icon: List, label: 'Leads', roles: ['admin', 'agent'], color: '#f59e0b' },
-    { path: '/calendar', icon: Calendar, label: 'Agenda', roles: ['admin', 'agent'], color: '#8b5cf6' },
+    { path: '/dashboard', icon: BarChart2, label: 'Dashboard', roles: ['admin', 'telepro'], color: '#059669' },
+    { path: '/calendar', icon: Calendar, label: 'Agenda', roles: ['admin', 'telepro'], color: '#8b5cf6' },
+    { path: '/prospection', icon: Search, label: 'Prospection', roles: ['admin', 'telepro'], color: '#3b82f6' },
   ];
 
-  const settingsItems = [
-    { path: '/settings/users', icon: Users, label: 'Utilisateurs', color: '#06b6d4' },
-    { path: '/settings/dimensioning', icon: Database, label: 'Dimensionnement', color: '#ec4899' },
+  const clientsItems = [
+    { path: '/clients/destratification', icon: Fan, label: 'Destratification', color: '#10b981', produit: 'destratification' },
+    { path: '/clients/pression', icon: Wind, label: 'Pression', color: '#3b82f6', produit: 'pression' },
+    { path: '/clients/matelas', icon: Layers, label: 'Matelas Isolants', color: '#f59e0b', produit: 'matelas_isolants' },
   ];
 
   const filteredNavItems = navItems.filter(item => item.roles.includes(user?.role));
 
-  // Auto-open settings if on a settings route
+  // Auto-open clients if on a clients route
   React.useEffect(() => {
-    if (location.pathname.startsWith('/settings')) {
-      setSettingsOpen(true);
+    if (location.pathname.startsWith('/clients')) {
+      setClientsOpen(true);
     }
   }, [location.pathname]);
 
@@ -80,44 +80,54 @@ const Layout = ({ children }) => {
             );
           })}
 
-          {/* Settings dropdown (admin only) */}
-          {user?.role === 'admin' && (
-            <div className={styles.settingsSection}>
-              <button
-                className={`${styles.navItem} ${styles.settingsToggle} ${location.pathname.startsWith('/settings') ? styles.active : ''}`}
-                onClick={() => setSettingsOpen(!settingsOpen)}
-                title="Paramètres"
-              >
-                <Settings size={sidebarOpen ? 20 : 56} style={{ color: location.pathname.startsWith('/settings') ? 'white' : '#64748b' }} />
-                {sidebarOpen && (
-                  <>
-                    <span>Paramètres</span>
-                    {settingsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                  </>
-                )}
-              </button>
-
-              {/* Submenu */}
-              {settingsOpen && sidebarOpen && (
-                <div className={styles.submenu}>
-                  {settingsItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location.pathname === item.path;
-                    return (
-                      <Link
-                        key={item.path}
-                        to={item.path}
-                        className={`${styles.submenuItem} ${isActive ? styles.active : ''}`}
-                        title={item.label}
-                      >
-                        <Icon size={18} style={{ color: isActive ? '#10b981' : item.color }} />
-                        <span>{item.label}</span>
-                      </Link>
-                    );
-                  })}
-                </div>
+          {/* Clients dropdown */}
+          <div className={styles.settingsSection}>
+            <button
+              className={`${styles.navItem} ${styles.settingsToggle} ${location.pathname.startsWith('/clients') ? styles.active : ''}`}
+              onClick={() => setClientsOpen(!clientsOpen)}
+              title="Clients"
+            >
+              <UserCheck size={sidebarOpen ? 20 : 56} style={{ color: location.pathname.startsWith('/clients') ? 'white' : '#10b981' }} />
+              {sidebarOpen && (
+                <>
+                  <span>Clients</span>
+                  {clientsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                </>
               )}
-            </div>
+            </button>
+
+            {/* Submenu */}
+            {clientsOpen && sidebarOpen && (
+              <div className={styles.submenu}>
+                {clientsItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = location.pathname === item.path;
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={`${styles.submenuItem} ${isActive ? styles.active : ''}`}
+                      title={item.label}
+                    >
+                      <Icon size={18} style={{ color: isActive ? '#10b981' : item.color }} />
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Users (admin only) */}
+          {user?.role === 'admin' && (
+            <Link
+              to="/users"
+              className={`${styles.navItem} ${location.pathname === '/users' ? styles.active : ''}`}
+              title="Utilisateurs"
+            >
+              <Users size={sidebarOpen ? 20 : 56} style={{ color: location.pathname === '/users' ? 'white' : '#06b6d4' }} />
+              {sidebarOpen && <span>Utilisateurs</span>}
+            </Link>
           )}
         </nav>
 
@@ -130,7 +140,7 @@ const Layout = ({ children }) => {
               <div className={styles.userDetails}>
                 <div className={styles.username}>{user?.username}</div>
                 <div className={styles.role}>
-                  {user?.role === 'admin' ? 'Administrateur' : 'Agent'}
+                  {user?.role === 'admin' ? 'Administrateur' : 'Téléprospecteur'}
                 </div>
               </div>
             )}

@@ -6,10 +6,9 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Clients from './pages/Clients';
-import Leads from './pages/Leads';
 import Calendar from './pages/Calendar';
 import Users from './pages/Users';
-import Settings from './pages/Settings';
+import Prospection from './pages/Prospection';
 
 function App() {
   return (
@@ -34,10 +33,10 @@ function App() {
             </PrivateRoute>
           } />
 
-          <Route path="/leads" element={
+          <Route path="/clients/:produit" element={
             <PrivateRoute>
               <Layout>
-                <Leads />
+                <Clients />
               </Layout>
             </PrivateRoute>
           } />
@@ -50,18 +49,18 @@ function App() {
             </PrivateRoute>
           } />
 
-          <Route path="/settings/users" element={
-            <PrivateRoute adminOnly={true}>
+          <Route path="/prospection" element={
+            <PrivateRoute>
               <Layout>
-                <Users />
+                <Prospection />
               </Layout>
             </PrivateRoute>
           } />
 
-          <Route path="/settings/dimensioning" element={
+          <Route path="/users" element={
             <PrivateRoute adminOnly={true}>
               <Layout>
-                <Settings />
+                <Users />
               </Layout>
             </PrivateRoute>
           } />

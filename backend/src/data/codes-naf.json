@@ -1,0 +1,239 @@
+{
+  "sections": {
+    "F": {
+      "libelle": "Construction",
+      "divisions": {
+        "41": {
+          "libelle": "Construction de bâtiments",
+          "codes": [
+            { "code": "4110A", "libelle": "Promotion immobilière de logements" },
+            { "code": "4110B", "libelle": "Promotion immobilière de bureaux" },
+            { "code": "4110C", "libelle": "Promotion immobilière d'autres bâtiments" },
+            { "code": "4110D", "libelle": "Supports juridiques de programmes" },
+            { "code": "4120A", "libelle": "Construction de maisons individuelles" },
+            { "code": "4120B", "libelle": "Construction d'autres bâtiments" }
+          ]
+        },
+        "42": {
+          "libelle": "Génie civil",
+          "codes": [
+            { "code": "4211Z", "libelle": "Construction de routes et autoroutes" },
+            { "code": "4212Z", "libelle": "Construction de voies ferrées de surface et souterraines" },
+            { "code": "4213A", "libelle": "Construction d'ouvrages d'art" },
+            { "code": "4213B", "libelle": "Construction et entretien de tunnels" },
+            { "code": "4221Z", "libelle": "Construction de réseaux pour fluides" },
+            { "code": "4222Z", "libelle": "Construction de réseaux électriques et de télécommunications" },
+            { "code": "4291Z", "libelle": "Construction d'ouvrages maritimes et fluviaux" },
+            { "code": "4299Z", "libelle": "Construction d'autres ouvrages de génie civil" }
+          ]
+        },
+        "43": {
+          "libelle": "Travaux de construction spécialisés",
+          "codes": [
+            { "code": "4311Z", "libelle": "Travaux de démolition" },
+            { "code": "4312A", "libelle": "Travaux de terrassement courants et travaux préparatoires" },
+            { "code": "4312B", "libelle": "Travaux de terrassement spécialisés ou de grande masse" },
+            { "code": "4313Z", "libelle": "Forages et sondages" },
+            { "code": "4321A", "libelle": "Travaux d'installation électrique dans tous locaux" },
+            { "code": "4321B", "libelle": "Travaux d'installation électrique sur la voie publique" },
+            { "code": "4322A", "libelle": "Travaux d'installation d'eau et de gaz en tous locaux" },
+            { "code": "4322B", "libelle": "Travaux d'installation d'équipements thermiques et de climatisation" },
+            { "code": "4329A", "libelle": "Travaux d'isolation" },
+            { "code": "4329B", "libelle": "Autres travaux d'installation" },
+            { "code": "4331Z", "libelle": "Travaux de plâtrerie" },
+            { "code": "4332A", "libelle": "Travaux de menuiserie bois et PVC" },
+            { "code": "4332B", "libelle": "Travaux de menuiserie métallique et serrurerie" },
+            { "code": "4332C", "libelle": "Agencement de lieux de vente" },
+            { "code": "4333Z", "libelle": "Travaux de revêtement des sols et des murs" },
+            { "code": "4334Z", "libelle": "Travaux de peinture et vitrerie" },
+            { "code": "4339Z", "libelle": "Autres travaux de finition" },
+            { "code": "4391A", "libelle": "Travaux de charpente" },
+            { "code": "4391B", "libelle": "Travaux de couverture par éléments" },
+            { "code": "4399A", "libelle": "Travaux d'étanchéification" },
+            { "code": "4399B", "libelle": "Travaux de montage de structures métalliques" },
+            { "code": "4399C", "libelle": "Travaux de maçonnerie générale et gros œuvre de bâtiment" },
+            { "code": "4399D", "libelle": "Autres travaux spécialisés de construction" },
+            { "code": "4399E", "libelle": "Location avec opérateur de matériel de construction" }
+          ]
+        }
+      }
+    },
+    "D": {
+      "libelle": "Production et distribution d'électricité, de gaz, de vapeur et d'air conditionné",
+      "divisions": {
+        "35": {
+          "libelle": "Production et distribution d'électricité, de gaz, de vapeur et d'air conditionné",
+          "codes": [
+            { "code": "3511Z", "libelle": "Production d'électricité" },
+            { "code": "3512Z", "libelle": "Transport d'électricité" },
+            { "code": "3513Z", "libelle": "Distribution d'électricité" },
+            { "code": "3514Z", "libelle": "Commerce d'électricité" },
+            { "code": "3521Z", "libelle": "Production de combustibles gazeux" },
+            { "code": "3522Z", "libelle": "Distribution de combustibles gazeux par conduites" },
+            { "code": "3523Z", "libelle": "Commerce de combustibles gazeux par conduites" },
+            { "code": "3530Z", "libelle": "Production et distribution de vapeur et d'air conditionné" }
+          ]
+        }
+      }
+    },
+    "C": {
+      "libelle": "Industrie manufacturière",
+      "divisions": {
+        "16": {
+          "libelle": "Travail du bois et fabrication d'articles en bois",
+          "codes": [
+            { "code": "1610A", "libelle": "Sciage et rabotage du bois, hors imprégnation" },
+            { "code": "1610B", "libelle": "Imprégnation du bois" },
+            { "code": "1621Z", "libelle": "Fabrication de placage et de panneaux de bois" },
+            { "code": "1622Z", "libelle": "Fabrication de parquets assemblés" },
+            { "code": "1623Z", "libelle": "Fabrication de charpentes et d'autres menuiseries" },
+            { "code": "1624Z", "libelle": "Fabrication d'emballages en bois" },
+            { "code": "1629Z", "libelle": "Fabrication d'objets divers en bois" }
+          ]
+        },
+        "23": {
+          "libelle": "Fabrication d'autres produits minéraux non métalliques",
+          "codes": [
+            { "code": "2311Z", "libelle": "Fabrication de verre plat" },
+            { "code": "2312Z", "libelle": "Façonnage et transformation du verre plat" },
+            { "code": "2313Z", "libelle": "Fabrication de verre creux" },
+            { "code": "2314Z", "libelle": "Fabrication de fibres de verre" },
+            { "code": "2319Z", "libelle": "Fabrication et façonnage d'autres articles en verre" },
+            { "code": "2320Z", "libelle": "Fabrication de produits réfractaires" },
+            { "code": "2331Z", "libelle": "Fabrication de carreaux en céramique" },
+            { "code": "2332Z", "libelle": "Fabrication de briques, tuiles et produits de construction" },
+            { "code": "2341Z", "libelle": "Fabrication d'articles céramiques à usage domestique" },
+            { "code": "2342Z", "libelle": "Fabrication d'appareils sanitaires en céramique" },
+            { "code": "2343Z", "libelle": "Fabrication d'isolateurs et pièces isolantes en céramique" },
+            { "code": "2344Z", "libelle": "Fabrication d'autres produits céramiques à usage technique" },
+            { "code": "2349Z", "libelle": "Fabrication d'autres produits céramiques" },
+            { "code": "2351Z", "libelle": "Fabrication de ciment" },
+            { "code": "2352Z", "libelle": "Fabrication de chaux et plâtre" },
+            { "code": "2361Z", "libelle": "Fabrication d'éléments en béton pour la construction" },
+            { "code": "2362Z", "libelle": "Fabrication d'éléments en plâtre pour la construction" },
+            { "code": "2363Z", "libelle": "Fabrication de béton prêt à l'emploi" },
+            { "code": "2364Z", "libelle": "Fabrication de mortiers et bétons secs" },
+            { "code": "2365Z", "libelle": "Fabrication d'ouvrages en fibre-ciment" },
+            { "code": "2369Z", "libelle": "Fabrication d'autres ouvrages en béton, en ciment ou en plâtre" },
+            { "code": "2370Z", "libelle": "Taille, façonnage et finissage de pierres" },
+            { "code": "2391Z", "libelle": "Fabrication de produits abrasifs" },
+            { "code": "2399Z", "libelle": "Fabrication d'autres produits minéraux non métalliques" }
+          ]
+        },
+        "25": {
+          "libelle": "Fabrication de produits métalliques",
+          "codes": [
+            { "code": "2511Z", "libelle": "Fabrication de structures métalliques et de parties de structures" },
+            { "code": "2512Z", "libelle": "Fabrication de portes et fenêtres en métal" },
+            { "code": "2521Z", "libelle": "Fabrication de radiateurs et de chaudières pour le chauffage central" },
+            { "code": "2529Z", "libelle": "Fabrication d'autres réservoirs, citernes et conteneurs métalliques" },
+            { "code": "2530Z", "libelle": "Fabrication de générateurs de vapeur" },
+            { "code": "2540Z", "libelle": "Fabrication d'armes et de munitions" },
+            { "code": "2550A", "libelle": "Forge, estampage, matriçage ; métallurgie des poudres" },
+            { "code": "2550B", "libelle": "Découpage, emboutissage" },
+            { "code": "2561Z", "libelle": "Traitement et revêtement des métaux" },
+            { "code": "2562A", "libelle": "Décolletage" },
+            { "code": "2562B", "libelle": "Mécanique industrielle" },
+            { "code": "2571Z", "libelle": "Fabrication de coutellerie" },
+            { "code": "2572Z", "libelle": "Fabrication de serrures et de ferrures" },
+            { "code": "2573A", "libelle": "Fabrication de moules et modèles" },
+            { "code": "2573B", "libelle": "Fabrication d'autres outillages" },
+            { "code": "2594Z", "libelle": "Fabrication de vis et de boulons" },
+            { "code": "2599A", "libelle": "Fabrication d'articles métalliques ménagers" },
+            { "code": "2599B", "libelle": "Fabrication d'autres articles métalliques" }
+          ]
+        },
+        "27": {
+          "libelle": "Fabrication d'équipements électriques",
+          "codes": [
+            { "code": "2711Z", "libelle": "Fabrication de moteurs, génératrices et transformateurs électriques" },
+            { "code": "2712Z", "libelle": "Fabrication de matériel de distribution et de commande électrique" },
+            { "code": "2720Z", "libelle": "Fabrication de piles et d'accumulateurs électriques" },
+            { "code": "2731Z", "libelle": "Fabrication de câbles de fibres optiques" },
+            { "code": "2732Z", "libelle": "Fabrication d'autres fils et câbles électroniques ou électriques" },
+            { "code": "2733Z", "libelle": "Fabrication de matériel d'installation électrique" },
+            { "code": "2740Z", "libelle": "Fabrication d'appareils d'éclairage électrique" },
+            { "code": "2751Z", "libelle": "Fabrication d'appareils électroménagers" },
+            { "code": "2752Z", "libelle": "Fabrication d'appareils ménagers non électriques" },
+            { "code": "2790Z", "libelle": "Fabrication d'autres matériels électriques" }
+          ]
+        },
+        "28": {
+          "libelle": "Fabrication de machines et équipements",
+          "codes": [
+            { "code": "2811Z", "libelle": "Fabrication de moteurs et turbines" },
+            { "code": "2812Z", "libelle": "Fabrication d'équipements hydrauliques et pneumatiques" },
+            { "code": "2813Z", "libelle": "Fabrication d'autres pompes et compresseurs" },
+            { "code": "2814Z", "libelle": "Fabrication d'autres articles de robinetterie" },
+            { "code": "2815Z", "libelle": "Fabrication d'engrenages et d'organes mécaniques de transmission" },
+            { "code": "2821Z", "libelle": "Fabrication de fours et brûleurs" },
+            { "code": "2822Z", "libelle": "Fabrication de matériel de levage et de manutention" },
+            { "code": "2823Z", "libelle": "Fabrication de machines et d'équipements de bureau" },
+            { "code": "2824Z", "libelle": "Fabrication d'outillage portatif à moteur incorporé" },
+            { "code": "2825Z", "libelle": "Fabrication d'équipements aérauliques et frigorifiques industriels" },
+            { "code": "2829A", "libelle": "Fabrication d'équipements d'emballage et de conditionnement" },
+            { "code": "2829B", "libelle": "Fabrication d'autres machines d'usage général" }
+          ]
+        }
+      }
+    },
+    "G": {
+      "libelle": "Commerce",
+      "divisions": {
+        "46": {
+          "libelle": "Commerce de gros",
+          "codes": [
+            { "code": "4613Z", "libelle": "Intermédiaires du commerce en bois et matériaux de construction" },
+            { "code": "4673A", "libelle": "Commerce de gros de bois et de matériaux de construction" },
+            { "code": "4673B", "libelle": "Commerce de gros d'appareils sanitaires et de produits de décoration" },
+            { "code": "4674A", "libelle": "Commerce de gros de quincaillerie" },
+            { "code": "4674B", "libelle": "Commerce de gros de fournitures et équipements industriels" }
+          ]
+        },
+        "47": {
+          "libelle": "Commerce de détail",
+          "codes": [
+            { "code": "4752A", "libelle": "Commerce de détail de quincaillerie, peintures et verres" },
+            { "code": "4752B", "libelle": "Commerce de détail de bricolage" }
+          ]
+        }
+      }
+    },
+    "M": {
+      "libelle": "Activités spécialisées, scientifiques et techniques",
+      "divisions": {
+        "71": {
+          "libelle": "Activités d'architecture et d'ingénierie",
+          "codes": [
+            { "code": "7111Z", "libelle": "Activités d'architecture" },
+            { "code": "7112A", "libelle": "Activité des géomètres" },
+            { "code": "7112B", "libelle": "Ingénierie, études techniques" },
+            { "code": "7120A", "libelle": "Contrôle technique automobile" },
+            { "code": "7120B", "libelle": "Analyses, essais et inspections techniques" }
+          ]
+        }
+      }
+    }
+  },
+  "categories_cee": {
+    "destratification": {
+      "libelle": "Destratification (Brasseurs d'air)",
+      "codes": ["4120B", "4322B", "4329A", "4321A", "4322A", "4120A", "4333Z", "2825Z", "3530Z"]
+    },
+    "pression": {
+      "libelle": "Réduction de pression (Détendeurs)",
+      "codes": ["4322A", "4322B", "4329A", "3511Z", "3530Z", "2813Z", "2814Z"]
+    },
+    "matelas_isolants": {
+      "libelle": "Matelas isolants (Calorifugeage)",
+      "codes": ["4329A", "4322B", "4120B", "4391A", "4399C", "2343Z", "2399Z"]
+    }
+  },
+  "metadata": {
+    "source": "INSEE - NAF rév. 2",
+    "version": "2008",
+    "date_creation": "2025-01-13",
+    "total_codes": 732,
+    "codes_pertinents_cee": 150
+  }
+}
