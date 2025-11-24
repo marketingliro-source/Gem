@@ -3,10 +3,11 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import {
   Search, Plus, FileText, Trash2, RefreshCw, Download, Upload,
-  ChevronLeft, ChevronRight, MessageSquare
+  ChevronLeft, ChevronRight, MessageSquare, HelpCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import ClientModal from '../components/ClientModal';
+import ImportCSVHelpModal from '../components/ImportCSVHelpModal';
 import styles from './Clients.module.css';
 
 const Clients = () => {
@@ -37,6 +38,7 @@ const Clients = () => {
   // Import/Export states
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [showImportHelp, setShowImportHelp] = useState(false);
 
   const STATUTS = [
     { key: '', label: 'Tous les statuts', color: '#6366f1' },
@@ -387,15 +389,24 @@ const Clients = () => {
             <RefreshCw size={18} />
           </button>
 
-          <button
-            onClick={handleImportCSV}
-            className={styles.importBtn}
-            title="Importer CSV"
-            disabled={importing}
-          >
-            <Upload size={18} />
-            {importing ? 'Import en cours...' : 'Import CSV'}
-          </button>
+          <div className={styles.importGroup}>
+            <button
+              onClick={handleImportCSV}
+              className={styles.importBtn}
+              title="Importer CSV"
+              disabled={importing}
+            >
+              <Upload size={18} />
+              {importing ? 'Import en cours...' : 'Import CSV'}
+            </button>
+            <button
+              onClick={() => setShowImportHelp(true)}
+              className={styles.helpBtn}
+              title="Guide d'import CSV"
+            >
+              <HelpCircle size={18} />
+            </button>
+          </div>
 
           <button
             onClick={handleExportExcel}
@@ -588,6 +599,12 @@ const Clients = () => {
           onClose={handleModalClose}
         />
       )}
+
+      {/* Modal d'aide pour l'import CSV */}
+      <ImportCSVHelpModal
+        isOpen={showImportHelp}
+        onClose={() => setShowImportHelp(false)}
+      />
     </div>
   );
 };
