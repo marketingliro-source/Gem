@@ -38,25 +38,29 @@ const AddAppointmentModal = ({ onClose, onSuccess }) => {
   const searchContacts = async () => {
     setSearching(true);
     try {
-      // Search in both leads and clients
-      const [leadsRes, clientsRes] = await Promise.all([
-        api.get(`/leads?search=${searchQuery}`),
-        api.get(`/clients?search=${searchQuery}`)
-      ]);
+      // Search only clients (no leads system in backend)
+      const clientsRes = await api.get(`/clients?search=${searchQuery}`);
 
-      const leads = leadsRes.data.map(lead => ({
-        ...lead,
-        type: 'lead',
-        displayName: `${lead.first_name} ${lead.last_name} (Lead)`
-      }));
+      const clients = (clientsRes.data.clients || clientsRes.data).map(client => {
+        // Build display name with both company and contact name
+        let name = client.societe || '';
+        if (client.nom_signataire && client.societe) {
+          name = `${client.societe} - ${client.nom_signataire}`;
+        } else if (client.nom_signataire) {
+          name = client.nom_signataire;
+        }
 
-      const clients = clientsRes.data.map(client => ({
-        ...client,
-        type: 'client',
-        displayName: `${client.first_name} ${client.last_name} (Client)`
-      }));
+        return {
+          ...client,
+          type: 'client',
+          displayName: name || 'Sans nom',
+          // Map client fields to expected format
+          phone: client.telephone || '',
+          city: client.code_postal || ''
+        };
+      });
 
-      setSearchResults([...leads, ...clients]);
+      setSearchResults(clients);
     } catch (error) {
       console.error('Erreur lors de la recherche:', error);
     } finally {
@@ -69,21 +73,13 @@ const AddAppointmentModal = ({ onClose, onSuccess }) => {
     setSearchQuery(contact.displayName);
     setSearchResults([]);
 
-    if (contact.type === 'lead') {
-      setFormData(prev => ({
-        ...prev,
-        lead_id: contact.id,
-        client_id: null,
-        title: `RDV avec ${contact.first_name} ${contact.last_name}`
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        client_id: contact.id,
-        lead_id: null,
-        title: `RDV avec ${contact.first_name} ${contact.last_name}`
-      }));
-    }
+    // Only clients (no leads)
+    setFormData(prev => ({
+      ...prev,
+      client_id: contact.id,
+      lead_id: null,
+      title: `RDV avec ${contact.nom_signataire || contact.societe || 'Client'}`
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -153,7 +149,7 @@ const AddAppointmentModal = ({ onClose, onSuccess }) => {
             {selectedContact && (
               <div className={styles.selectedContact}>
                 <div className={styles.contactBadge}>
-                  {selectedContact.type === 'lead' ? '🎯' : '✅'} {selectedContact.displayName}
+                  ✅ {selectedContact.displayName}
                 </div>
               </div>
             )}

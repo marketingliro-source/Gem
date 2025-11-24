@@ -155,6 +155,106 @@ class BDNBService {
   }
 
   /**
+   * Recherche bâtiment par ID-RNB (Référentiel National des Bâtiments)
+   * Utilise l'ID-RNB comme pivot pour cross-référencer avec RNB
+   * @param {string} idRNB - Identifiant RNB (12 caractères)
+   * @returns {Promise<Object|null>}
+   */
+  async searchByIdRNB(idRNB) {
+    if (!idRNB || idRNB.length !== 12) {
+      throw new Error('ID-RNB invalide (12 caractères requis)');
+    }
+
+    const cacheKey = `bdnb:rnb:${idRNB}`;
+
+    return await cacheService.getOrSet(cacheKey, async () => {
+      await cacheService.waitForRateLimit('bdnb');
+
+      try {
+        // BDNB API v2 supporte la recherche par rnb_id
+        const params = {
+          rnb_id: idRNB,
+          limit: 1
+        };
+
+        const response = await this.client.get('/buildings', {
+          params,
+          headers: this.getAuthHeaders()
+        });
+
+        const results = response.data.results || response.data || [];
+
+        if (results.length === 0) {
+          console.warn(`⚠️  BDNB: Aucun bâtiment trouvé pour ID-RNB ${idRNB}`);
+          return null;
+        }
+
+        console.log(`✅ BDNB: Bâtiment trouvé pour ID-RNB ${idRNB}`);
+        return this.formatBuilding(results[0]);
+
+      } catch (error) {
+        console.error('❌ Erreur recherche BDNB par ID-RNB:', error.message);
+        return null;
+      }
+    }, 7776000); // Cache 90 jours (ID-RNB stable)
+  }
+
+  /**
+   * Recherche enrichie multi-méthodes
+   * Essaie plusieurs méthodes de recherche pour maximiser chances de succès
+   * @param {Object} criteria - { idRNB?, coordinates?, adresse? }
+   * @returns {Promise<Object|null>}
+   */
+  async searchSmart(criteria) {
+    // 1. Essayer par ID-RNB si disponible (le plus fiable)
+    if (criteria.idRNB) {
+      try {
+        const result = await this.searchByIdRNB(criteria.idRNB);
+        if (result) {
+          console.log('✅ BDNB: Trouvé via ID-RNB');
+          return result;
+        }
+      } catch (error) {
+        console.warn('⚠️  BDNB: Échec recherche ID-RNB, fallback coordonnées');
+      }
+    }
+
+    // 2. Essayer par coordonnées GPS si disponibles
+    if (criteria.coordinates?.latitude && criteria.coordinates?.longitude) {
+      try {
+        const results = await this.searchByCoordinates(
+          criteria.coordinates.latitude,
+          criteria.coordinates.longitude,
+          criteria.radius || 50
+        );
+
+        if (results && results.length > 0) {
+          console.log('✅ BDNB: Trouvé via coordonnées GPS');
+          return results[0];
+        }
+      } catch (error) {
+        console.warn('⚠️  BDNB: Échec recherche coordonnées, fallback adresse');
+      }
+    }
+
+    // 3. Fallback: recherche par adresse
+    if (criteria.adresse) {
+      try {
+        const results = await this.searchByAddress(criteria.adresse);
+        if (results && results.length > 0) {
+          console.log('✅ BDNB: Trouvé via adresse');
+          return results[0];
+        }
+      } catch (error) {
+        console.warn('⚠️  BDNB: Échec recherche adresse');
+      }
+    }
+
+    console.warn('⚠️  BDNB: Aucune méthode de recherche n\'a abouti');
+    return null;
+  }
+
+  /**
    * Formate les données bâtiment BDNB
    * @param {Object} data - Données brutes
    * @returns {Object}
@@ -162,6 +262,7 @@ class BDNBService {
   formatBuilding(data) {
     return {
       id: data.batiment_groupe_id || data.id,
+      idRNB: data.rnb_id || data.id_rnb || null, // ID-RNB pour cross-référencement
 
       // Localisation
       adresse: data.adresse_principale || data.adresse,

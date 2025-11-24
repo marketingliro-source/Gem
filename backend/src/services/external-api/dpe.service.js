@@ -11,11 +11,11 @@ class DPEService {
   constructor() {
     this.baseURL = process.env.DPE_API_URL || 'https://data.ademe.fr/data-fair/api/v1/datasets';
 
-    // IDs des datasets DPE
+    // IDs des datasets DPE (MISE À JOUR 2024/2025)
     this.datasets = {
-      tertiaire: 'dpe-v2-logements-existants', // DPE tertiaire/non-résidentiel
-      existant: 'dpe-v2-logements-existants',  // DPE logements existants
-      neuf: 'dpe-v2-logements-neufs'           // DPE logements neufs
+      tertiaire: process.env.DPE_DATASET_TERTIAIRE || 'j9ol0fwjqckyf49vr29nknbu',  // DPE tertiaire
+      existant: process.env.DPE_DATASET_LOGEMENTS || 'meg-83tjwtg8dyz4vv7h1dqe',   // DPE logements existants
+      neuf: process.env.DPE_DATASET_NEUFS || 'g3cgx7jb3cmys5voxz1mrm22'            // DPE logements neufs
     };
 
     this.client = axios.create({
@@ -55,32 +55,36 @@ class DPEService {
         const params = {
           size: 20,
           select: [
-            'N°DPE',
-            'Code_postal_(BAN)',
-            'Nom_commune_(Brut)',
-            'Adresse_(BAN)',
-            'Etiquette_DPE',
-            'Etiquette_GES',
-            'Conso_5_usages_é_finale',
-            'Surface_habitable_logement',
-            'Type_bâtiment',
-            'Année_construction',
-            'Type_installation_chauffage',
-            'Type_énergie_principale_chauffage',
-            'Surface_utile',
-            'Hauteur_sous-plafond',
-            'Nombre_niveaux_logement'
+            'numero_dpe',
+            'code_postal_ban',
+            'nom_commune_ban',
+            'adresse_ban',
+            'etiquette_dpe',
+            'etiquette_ges',
+            'conso_kwhep_m2_an',
+            'surface_utile',
+            'surface_habitable',
+            'surface_shon',
+            'periode_construction',
+            'annee_construction',
+            'type_energie_n1',
+            'type_energie_principale_chauffage_n1',
+            'type_installation_chauffage_n1',
+            'hauteur_sous_plafond',
+            'nombre_niveaux',
+            'secteur_activite',
+            '_geopoint'
           ].join(',')
         };
 
         // Construire la requête de recherche
         const q = [];
-        if (adresse.codePostal) q.push(`Code_postal_(BAN):${adresse.codePostal}`);
-        if (adresse.commune) q.push(`Nom_commune_(Brut):${adresse.commune}`);
+        if (adresse.codePostal) q.push(`code_postal_ban:${adresse.codePostal}`);
+        if (adresse.commune) q.push(`nom_commune_ban:${adresse.commune}`);
         if (adresse.adresse) {
           // Nettoyage de l'adresse pour la recherche
           const cleanAddr = adresse.adresse.replace(/[^\w\s]/g, ' ').trim();
-          q.push(`Adresse_(BAN):*${cleanAddr}*`);
+          q.push(`adresse_ban:*${cleanAddr}*`);
         }
 
         if (q.length > 0) {
@@ -117,7 +121,7 @@ class DPEService {
 
       try {
         const params = {
-          q: `N°_SIRET:${siret}`,
+          q: `n_siret:${siret}`,
           q_mode: 'simple',
           size: 20
         };
@@ -147,7 +151,7 @@ class DPEService {
 
       try {
         const params = {
-          q: `Code_postal_(BAN):${codePostal}`,
+          q: `code_postal_ban:${codePostal}`,
           q_mode: 'simple',
           size: 1000 // Récupérer plus de résultats pour les stats
         };
@@ -175,32 +179,32 @@ class DPEService {
 
         results.forEach(dpe => {
           // Étiquettes
-          const etiquette = dpe['Etiquette_DPE'] || 'Inconnu';
+          const etiquette = dpe['etiquette_dpe'] || 'Inconnu';
           stats.etiquettes[etiquette] = (stats.etiquettes[etiquette] || 0) + 1;
 
           // Consommation
-          const conso = parseFloat(dpe['Conso_5_usages_é_finale']);
+          const conso = parseFloat(dpe['conso_kwhep_m2_an'] || dpe['conso_5_usages_par_m2_ef']);
           if (!isNaN(conso)) {
             totalConso += conso;
             countConso++;
           }
 
           // Surface
-          const surface = parseFloat(dpe['Surface_habitable_logement'] || dpe['Surface_utile']);
+          const surface = parseFloat(dpe['surface_habitable'] || dpe['surface_utile']);
           if (!isNaN(surface)) {
             totalSurface += surface;
             countSurface++;
           }
 
           // Année
-          const annee = parseInt(dpe['Année_construction']);
+          const annee = parseInt(dpe['annee_construction']);
           if (!isNaN(annee)) {
             totalAnnee += annee;
             countAnnee++;
           }
 
           // Type chauffage
-          const typeChauf = dpe['Type_énergie_principale_chauffage'];
+          const typeChauf = dpe['type_energie_n1'] || dpe['type_energie_principale_chauffage_n1'];
           if (typeChauf) {
             stats.typesChauffage[typeChauf] = (stats.typesChauffage[typeChauf] || 0) + 1;
           }
@@ -226,31 +230,43 @@ class DPEService {
    */
   formatDPE(data) {
     return {
-      numeroDPE: data['N°DPE'],
-      adresse: data['Adresse_(BAN)'],
-      codePostal: data['Code_postal_(BAN)'],
-      commune: data['Nom_commune_(Brut)'],
+      numeroDPE: data['numero_dpe'],
+      adresse: data['adresse_ban'],
+      codePostal: data['code_postal_ban'],
+      commune: data['nom_commune_ban'],
 
       // Performance énergétique
-      etiquetteDPE: data['Etiquette_DPE'],
-      etiquetteGES: data['Etiquette_GES'],
-      consommation: parseFloat(data['Conso_5_usages_é_finale']) || null,
+      etiquetteDPE: data['etiquette_dpe'],
+      etiquetteGES: data['etiquette_ges'],
+      consommation: parseFloat(data['conso_kwhep_m2_an'] || data['conso_5_usages_par_m2_ef']) || null,
       consommationUnit: 'kWh/m²/an',
 
       // Caractéristiques bâtiment
-      typeBatiment: data['Type_bâtiment'],
-      anneeConstruction: parseInt(data['Année_construction']) || null,
-      surface: parseFloat(data['Surface_habitable_logement'] || data['Surface_utile']) || null,
-      hauteurPlafond: parseFloat(data['Hauteur_sous-plafond']) || null,
-      nombreNiveaux: parseInt(data['Nombre_niveaux_logement']) || null,
+      typeBatiment: data['type_batiment'],
+      secteurActivite: data['secteur_activite'],
+      periodeConstruction: data['periode_construction'],
+      anneeConstruction: parseInt(data['annee_construction']) || null,
+      surface: parseFloat(data['surface_habitable'] || data['surface_utile']) || null,
+      surfaceShon: parseFloat(data['surface_shon']) || null,
+      hauteurPlafond: parseFloat(data['hauteur_sous_plafond']) || null,
+      nombreNiveaux: parseInt(data['nombre_niveaux'] || data['nombre_niveaux_logement']) || null,
 
       // Chauffage
-      typeInstallationChauffage: data['Type_installation_chauffage'],
-      typeEnergieChauffage: data['Type_énergie_principale_chauffage'],
+      typeInstallationChauffage: data['type_installation_chauffage_n1'] || data['type_installation_chauffage'],
+      typeEnergieChauffage: data['type_energie_n1'] || data['type_energie_principale_chauffage_n1'],
+
+      // Géolocalisation
+      geopoint: data['_geopoint'],
+      coordinates: data['_geopoint'] ? {
+        latitude: parseFloat(data['_geopoint'].split(',')[0]),
+        longitude: parseFloat(data['_geopoint'].split(',')[1])
+      } : null,
 
       // Métadonnées
-      dateDPE: data['Date_établissement_DPE'],
-      version: data['Version_DPE'] || '2021',
+      dateDPE: data['date_etablissement_dpe'],
+      dateFinValidite: data['date_fin_validite_dpe'],
+      methodeDPE: data['methode_dpe'],
+      version: data['version_dpe'] || '2021',
 
       _raw: data,
       _source: 'dpe-ademe'

@@ -1,47 +1,96 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useParams, useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
+import {
+  Search, Plus, FileText, Trash2, RefreshCw, Download, Upload,
+  ChevronLeft, ChevronRight, MessageSquare
+} from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import ClientModal from '../components/ClientModal';
-import { Trash2, RefreshCw, Search, ChevronLeft, ChevronRight, MessageSquare, Download } from 'lucide-react';
 import styles from './Clients.module.css';
 
-const CLIENT_STATUSES = [
-  { value: '', label: 'Tous', color: '#6366f1' },
-  { value: 'nouveau', label: 'Nouveau', color: '#10b981' },
-  { value: 'mail_envoye', label: 'Mail envoyé', color: '#3b82f6' },
-  { value: 'documents_recus', label: 'Documents reçus', color: '#8b5cf6' },
-  { value: 'annule', label: 'Annulé', color: '#ef4444' },
-];
-
 const Clients = () => {
+  const { produit } = useParams();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
+
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('');
-  const [selectedClients, setSelectedClients] = useState([]);
-  const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, pages: 0 });
-  const [selectedClient, setSelectedClient] = useState(null);
+  const [filterStatut, setFilterStatut] = useState(searchParams.get('statut') || '');
+  const [filterProduit, setFilterProduit] = useState(produit || '');
+  const [filterCodeNAF, setFilterCodeNAF] = useState('');
+  const [filterCodePostal, setFilterCodePostal] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [selectedClient, setSelectedClient] = useState(null);
+
+  // Pagination
+  const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, pages: 0 });
+
+  // Sélection multiple
+  const [selectedClients, setSelectedClients] = useState([]);
+
+  // Preview commentaires
   const [hoveredClient, setHoveredClient] = useState(null);
   const [clientComments, setClientComments] = useState({});
 
+  // Import/Export states
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const STATUTS = [
+    { key: '', label: 'Tous les statuts', color: '#6366f1' },
+    { key: 'nouveau', label: 'Nouveau', color: '#10b981' },
+    { key: 'a_rappeler', label: 'À Rappeler', color: '#f59e0b' },
+    { key: 'mail_infos_envoye', label: 'Mail Infos Envoyé', color: '#3b82f6' },
+    { key: 'infos_recues', label: 'Infos Reçues', color: '#8b5cf6' },
+    { key: 'devis_envoye', label: 'Devis Envoyé', color: '#ec4899' },
+    { key: 'devis_signe', label: 'Devis Signé', color: '#14b8a6' },
+    { key: 'pose_prevue', label: 'Pose Prévue', color: '#f97316' },
+    { key: 'pose_terminee', label: 'Pose Terminée', color: '#06b6d4' },
+    { key: 'coffrac', label: 'Coffrac', color: '#84cc16' },
+    { key: 'termine', label: 'Terminé', color: '#059669' }
+  ];
+
+  const PRODUITS = [
+    { key: '', label: 'Tous les produits' },
+    { key: 'destratification', label: 'Destratification', color: '#10b981' },
+    { key: 'pression', label: 'Pression', color: '#8b5cf6' },
+    { key: 'matelas_isolants', label: 'Matelas Isolants', color: '#f59e0b' }
+  ];
+
+  useEffect(() => {
+    if (produit) {
+      setFilterProduit(produit);
+    }
+  }, [produit]);
+
   useEffect(() => {
     fetchClients();
-  }, [selectedStatus, pagination.page]);
+  }, [filterStatut, filterProduit, filterCodeNAF, filterCodePostal, pagination.page]);
 
   const fetchClients = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/clients', {
-        params: {
-          status: selectedStatus,
-          page: pagination.page,
-          limit: pagination.limit
-        }
-      });
-      setClients(response.data.clients);
-      setPagination(prev => ({ ...prev, ...response.data.pagination }));
+      const params = new URLSearchParams();
+      if (filterStatut) params.append('statut', filterStatut);
+      if (filterProduit) params.append('type_produit', filterProduit);
+      if (filterCodeNAF) params.append('code_naf', filterCodeNAF);
+      if (filterCodePostal) params.append('code_postal', filterCodePostal);
+      if (searchTerm) params.append('search', searchTerm);
+      params.append('page', pagination.page);
+      params.append('limit', pagination.limit);
+
+      const response = await api.get(`/clients?${params.toString()}`);
+
+      // Support both formats
+      if (response.data.clients) {
+        setClients(response.data.clients);
+        setPagination(prev => ({ ...prev, ...response.data.pagination }));
+      } else {
+        setClients(response.data);
+        setPagination(prev => ({ ...prev, total: response.data.length, pages: 1 }));
+      }
     } catch (error) {
       console.error('Erreur lors du chargement des clients:', error);
     } finally {
@@ -49,9 +98,40 @@ const Clients = () => {
     }
   };
 
+  const handleAddClient = () => {
+    setSelectedClient(null);
+    setShowModal(true);
+  };
+
+  const handleEditClient = (client) => {
+    setSelectedClient(client);
+    setShowModal(true);
+  };
+
+  const handleDeleteClient = async (clientId) => {
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce client ?')) return;
+
+    try {
+      await api.delete(`/clients/${clientId}`);
+      fetchClients();
+    } catch (error) {
+      console.error('Erreur lors de la suppression:', error);
+      alert('Erreur lors de la suppression du client');
+    }
+  };
+
+  const handleModalClose = (shouldRefresh) => {
+    setShowModal(false);
+    setSelectedClient(null);
+    if (shouldRefresh) {
+      fetchClients();
+    }
+  };
+
+  // Sélection multiple
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedClients(clients.map(client => client.id));
+      setSelectedClients(filteredClients.map(client => client.id));
     } else {
       setSelectedClients([]);
     }
@@ -67,7 +147,7 @@ const Clients = () => {
 
   const handleBulkDelete = async () => {
     if (!selectedClients.length) return;
-    if (!confirm(`Supprimer ${selectedClients.length} client(s) ?`)) return;
+    if (!window.confirm(`Supprimer ${selectedClients.length} client(s) ?`)) return;
 
     try {
       for (const id of selectedClients) {
@@ -80,14 +160,28 @@ const Clients = () => {
     }
   };
 
+  const handleStatusChange = async (clientId, newStatut) => {
+    try {
+      await api.patch(`/clients/${clientId}`, { statut: newStatut });
+      // Update local state to avoid full refetch
+      setClients(prev => prev.map(c =>
+        c.id === clientId ? { ...c, statut: newStatut } : c
+      ));
+    } catch (error) {
+      console.error('Erreur lors du changement de statut:', error);
+      alert('Erreur lors de la mise à jour du statut');
+    }
+  };
+
+  // Preview commentaires
   const fetchClientComments = async (clientId) => {
-    if (clientComments[clientId]) return; // Already cached
+    if (clientComments[clientId]) return;
 
     try {
       const response = await api.get(`/clients/${clientId}/comments`);
       setClientComments(prev => ({
         ...prev,
-        [clientId]: response.data.slice(0, 4) // Limit to 4 comments
+        [clientId]: response.data.slice(0, 4)
       }));
     } catch (error) {
       console.error('Erreur lors du chargement des commentaires:', error);
@@ -103,7 +197,39 @@ const Clients = () => {
     fetchClientComments(clientId);
   };
 
+  // Import CSV
+  const handleImportCSV = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      setImporting(true);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const response = await api.post('/clients/import/csv', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        alert(`✅ Import réussi!\n${response.data.imported} client(s) importé(s)`);
+        fetchClients();
+      } catch (error) {
+        const errorMsg = error.response?.data?.error || 'Erreur lors de l\'import CSV';
+        alert(`❌ Échec de l'import\n${errorMsg}`);
+        console.error('Import error:', error);
+      } finally {
+        setImporting(false);
+      }
+    };
+    input.click();
+  };
+
+  // Export Excel
   const handleExportExcel = async () => {
+    setExporting(true);
     try {
       const response = await api.get('/clients/export/excel', {
         responseType: 'blob'
@@ -117,20 +243,62 @@ const Clients = () => {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+
+      alert(`✅ Export réussi!\nFichier téléchargé avec succès`);
     } catch (error) {
       console.error('Erreur lors de l\'export:', error);
-      alert('Erreur lors de l\'export Excel');
+      const errorMsg = error.response?.data?.error || 'Erreur lors de l\'export Excel';
+      alert(`❌ Échec de l'export\n${errorMsg}`);
+    } finally {
+      setExporting(false);
     }
   };
 
+  const getStatutObj = (statut) => {
+    return STATUTS.find(s => s.key === statut) || STATUTS[0];
+  };
+
+  const getProduitObj = (produit) => {
+    return PRODUITS.find(p => p.key === produit) || PRODUITS[0];
+  };
+
+  const renderStatutBadge = (statut) => {
+    const statutObj = getStatutObj(statut);
+    if (!statutObj || !statutObj.color) return null;
+
+    return (
+      <span
+        className={styles.badge}
+        style={{ backgroundColor: `${statutObj.color}20`, color: statutObj.color }}
+      >
+        {statutObj.label}
+      </span>
+    );
+  };
+
+  const renderProduitBadge = (produit) => {
+    const produitObj = getProduitObj(produit);
+    if (!produitObj || !produitObj.color) return null;
+
+    return (
+      <span
+        className={styles.badge}
+        style={{ backgroundColor: `${produitObj.color}20`, color: produitObj.color }}
+      >
+        {produitObj.label}
+      </span>
+    );
+  };
+
   const filteredClients = clients.filter(client => {
+    if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
     return (
-      client.first_name?.toLowerCase().includes(searchLower) ||
-      client.last_name?.toLowerCase().includes(searchLower) ||
-      client.email?.toLowerCase().includes(searchLower) ||
-      client.phone?.toLowerCase().includes(searchLower) ||
-      client.city?.toLowerCase().includes(searchLower)
+      client.societe?.toLowerCase().includes(searchLower) ||
+      client.nom_signataire?.toLowerCase().includes(searchLower) ||
+      client.telephone?.toLowerCase().includes(searchLower) ||
+      client.siret?.toLowerCase().includes(searchLower) ||
+      client.code_postal?.toLowerCase().includes(searchLower)
     );
   });
 
@@ -145,6 +313,10 @@ const Clients = () => {
             {pagination.total} client(s) total
           </p>
         </div>
+        <button onClick={handleAddClient} className={styles.addBtn}>
+          <Plus size={20} />
+          Nouveau Client
+        </button>
       </div>
 
       <div className={styles.toolbar}>
@@ -152,7 +324,7 @@ const Clients = () => {
           <Search size={18} />
           <input
             type="text"
-            placeholder="Rechercher un client..."
+            placeholder="Rechercher un client (société, nom, tél, SIRET)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -160,31 +332,79 @@ const Clients = () => {
 
         <div className={styles.filters}>
           <select
-            value={selectedStatus}
+            value={filterStatut}
             onChange={(e) => {
-              setSelectedStatus(e.target.value);
+              setFilterStatut(e.target.value);
               setPagination(prev => ({ ...prev, page: 1 }));
             }}
             className={styles.statusFilter}
           >
-            {CLIENT_STATUSES.map(status => (
-              <option key={status.value} value={status.value}>
+            {STATUTS.map(status => (
+              <option key={status.key} value={status.key}>
                 {status.label}
               </option>
             ))}
           </select>
+
+          <select
+            value={filterProduit}
+            onChange={(e) => {
+              setFilterProduit(e.target.value);
+              setPagination(prev => ({ ...prev, page: 1 }));
+            }}
+            className={styles.statusFilter}
+          >
+            {PRODUITS.map(produit => (
+              <option key={produit.key} value={produit.key}>
+                {produit.label}
+              </option>
+            ))}
+          </select>
+
+          <input
+            type="text"
+            placeholder="Code Postal..."
+            value={filterCodePostal}
+            onChange={(e) => {
+              setFilterCodePostal(e.target.value);
+              setPagination(prev => ({ ...prev, page: 1 }));
+            }}
+            className={styles.codePostalFilter}
+          />
+
+          <input
+            type="text"
+            placeholder="Code NAF..."
+            value={filterCodeNAF}
+            onChange={(e) => {
+              setFilterCodeNAF(e.target.value);
+              setPagination(prev => ({ ...prev, page: 1 }));
+            }}
+            className={styles.codeNafFilter}
+          />
 
           <button onClick={fetchClients} className={styles.iconBtn} title="Rafraîchir">
             <RefreshCw size={18} />
           </button>
 
           <button
+            onClick={handleImportCSV}
+            className={styles.importBtn}
+            title="Importer CSV"
+            disabled={importing}
+          >
+            <Upload size={18} />
+            {importing ? 'Import en cours...' : 'Import CSV'}
+          </button>
+
+          <button
             onClick={handleExportExcel}
             className={styles.exportBtn}
             title="Exporter en Excel"
+            disabled={exporting}
           >
             <Download size={18} />
-            Exporter Excel
+            {exporting ? 'Export en cours...' : 'Export Excel'}
           </button>
         </div>
       </div>
@@ -212,15 +432,15 @@ const Clients = () => {
                 <th>
                   <input
                     type="checkbox"
-                    checked={selectedClients.length === clients.length && clients.length > 0}
+                    checked={selectedClients.length === filteredClients.length && filteredClients.length > 0}
                     onChange={handleSelectAll}
                   />
                 </th>
-                <th>Nom</th>
-                <th>Prénom</th>
-                <th>Email</th>
+                <th>Société</th>
+                <th>Contact</th>
                 <th>Téléphone</th>
-                <th>Ville</th>
+                <th>Code Postal</th>
+                <th>{filterProduit ? 'Code NAF' : 'Produit'}</th>
                 <th>Statut</th>
                 {user?.role === 'admin' && <th>Attribué à</th>}
                 <th>Date</th>
@@ -229,7 +449,10 @@ const Clients = () => {
             </thead>
             <tbody>
               {filteredClients.map(client => (
-                <tr key={client.id} className={selectedClients.includes(client.id) ? styles.selected : ''}>
+                <tr
+                  key={client.id}
+                  className={selectedClients.includes(client.id) ? styles.selected : ''}
+                >
                   <td>
                     <input
                       type="checkbox"
@@ -237,20 +460,29 @@ const Clients = () => {
                       onChange={() => handleSelectClient(client.id)}
                     />
                   </td>
-                  <td className={styles.name}>{client.last_name}</td>
-                  <td className={styles.name}>{client.first_name}</td>
-                  <td>{client.email || '-'}</td>
-                  <td>{client.phone || '-'}</td>
-                  <td>{client.city || '-'}</td>
+                  <td className={styles.name}>{client.societe || '-'}</td>
+                  <td>{client.nom_signataire || '-'}</td>
+                  <td>{client.telephone || '-'}</td>
+                  <td>{client.code_postal || '-'}</td>
                   <td>
-                    {client.status && (
-                      <span className={`${styles.statusBadge} ${styles[`status_${client.status}`]}`}>
-                        {client.status === 'nouveau' && 'Nouveau'}
-                        {client.status === 'mail_envoye' && 'Mail envoyé'}
-                        {client.status === 'documents_recus' && 'Documents reçus'}
-                        {client.status === 'annule' && 'Annulé'}
-                      </span>
-                    )}
+                    {filterProduit ? (client.code_naf || '-') : renderProduitBadge(client.type_produit)}
+                  </td>
+                  <td>
+                    <select
+                      value={client.statut}
+                      onChange={(e) => handleStatusChange(client.id, e.target.value)}
+                      className={styles.statusSelect}
+                      style={{
+                        borderColor: getStatutObj(client.statut)?.color || '#10b981'
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {STATUTS.filter(s => s.key !== '').map(status => (
+                        <option key={status.key} value={status.key}>
+                          {status.label}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   {user?.role === 'admin' && (
                     <td>{client.assigned_username || 'Non attribué'}</td>
@@ -296,10 +528,7 @@ const Clients = () => {
                       </div>
 
                       <button
-                        onClick={() => {
-                          setSelectedClient(client);
-                          setShowModal(true);
-                        }}
+                        onClick={() => handleEditClient(client)}
                         className={styles.btnView}
                       >
                         Voir
@@ -324,7 +553,7 @@ const Clients = () => {
           </button>
 
           <div className={styles.pageNumbers}>
-            {[...Array(pagination.pages)].map((_, index) => {
+            {[...Array(Math.min(pagination.pages, 10))].map((_, index) => {
               const pageNum = index + 1;
               return (
                 <button
@@ -352,14 +581,11 @@ const Clients = () => {
         </div>
       )}
 
-      {showModal && selectedClient && (
+      {showModal && (
         <ClientModal
           client={selectedClient}
-          onClose={() => {
-            setShowModal(false);
-            setSelectedClient(null);
-            fetchClients();
-          }}
+          isNew={!selectedClient}
+          onClose={handleModalClose}
         />
       )}
     </div>

@@ -54,6 +54,75 @@ router.post('/search', authenticateToken, async (req, res) => {
 });
 
 /**
+ * @route   POST /api/prospection/search-enriched
+ * @desc    Recherche enrichie multi-sources avec scoring intelligent
+ * @access  Private
+ */
+router.post('/search-enriched', authenticateToken, async (req, res) => {
+  try {
+    const {
+      codeNAF,
+      departement,
+      region,
+      codePostal,
+      commune,
+      produit,
+      scoreMinimum,
+      limit,
+      enrichAll
+    } = req.body;
+
+    // Validation
+    if (!produit) {
+      return res.status(400).json({
+        error: 'Produit requis (destratification, pression, matelas_isolants)'
+      });
+    }
+
+    if (!codeNAF && !departement && !region && !codePostal && !commune) {
+      return res.status(400).json({
+        error: 'Au moins un critère de recherche requis (NAF ou géographique)'
+      });
+    }
+
+    console.log('🔍 Recherche enrichie API:', { produit, codeNAF, departement, region, codePostal, commune });
+
+    const results = await prospectionService.searchEnriched({
+      codeNAF,
+      departement,
+      region,
+      codePostal,
+      commune,
+      produit,
+      scoreMinimum: scoreMinimum ? parseInt(scoreMinimum) : null,
+      limit: parseInt(limit) || 20,
+      enrichAll: enrichAll === true
+    });
+
+    res.json({
+      success: true,
+      total: results.length,
+      produit,
+      criteria: { codeNAF, departement, region, codePostal, commune },
+      results,
+      metadata: {
+        date: new Date().toISOString(),
+        enrichAll: enrichAll === true,
+        scoreMinimum: scoreMinimum || 'auto'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur recherche enrichie:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la recherche enrichie',
+      message: error.message
+    });
+  }
+});
+
+/**
  * @route   POST /api/prospection/export/csv
  * @desc    Exporte les résultats de prospection en CSV
  * @access  Private

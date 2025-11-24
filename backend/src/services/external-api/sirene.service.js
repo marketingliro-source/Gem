@@ -5,14 +5,12 @@ const cacheService = require('../cache.service');
 /**
  * Service pour l'API SIRENE de l'INSEE
  * Documentation: https://portail-api.insee.fr/
+ * Authentification: API Key simple (X-INSEE-Api-Key-Integration header)
  */
 class SireneService {
   constructor() {
-    this.baseURL = process.env.INSEE_BASE_URL || 'https://api.insee.fr/entreprises/sirene/V3.11';
+    this.baseURL = process.env.INSEE_BASE_URL || 'https://api.insee.fr/api-sirene/3.11';
     this.apiKey = process.env.INSEE_API_KEY;
-    this.apiSecret = process.env.INSEE_API_SECRET;
-    this.accessToken = null;
-    this.tokenExpiry = null;
 
     // Configuration axios avec retry
     this.client = axios.create({
@@ -35,44 +33,26 @@ class SireneService {
   }
 
   /**
-   * Obtient un token d'accès OAuth2
-   * @returns {Promise<string>}
+   * Vérifie si l'API key est configurée
+   * @returns {boolean}
    */
-  async getAccessToken() {
-    // Vérifier si le token est encore valide
-    if (this.accessToken && this.tokenExpiry && Date.now() < this.tokenExpiry) {
-      return this.accessToken;
+  isConfigured() {
+    return !!this.apiKey;
+  }
+
+  /**
+   * Génère les headers d'authentification
+   * @returns {Object}
+   */
+  getAuthHeaders() {
+    if (!this.apiKey) {
+      throw new Error('INSEE_API_KEY requis dans .env');
     }
 
-    if (!this.apiKey || !this.apiSecret) {
-      throw new Error('INSEE_API_KEY et INSEE_API_SECRET requis dans .env');
-    }
-
-    try {
-      const authString = Buffer.from(`${this.apiKey}:${this.apiSecret}`).toString('base64');
-
-      const response = await axios.post(
-        'https://api.insee.fr/token',
-        'grant_type=client_credentials',
-        {
-          headers: {
-            'Authorization': `Basic ${authString}`,
-            'Content-Type': 'application/x-www-form-urlencoded'
-          }
-        }
-      );
-
-      this.accessToken = response.data.access_token;
-      // Token expire dans expires_in secondes (généralement 604800 = 7 jours)
-      this.tokenExpiry = Date.now() + (response.data.expires_in * 1000);
-
-      console.log('✅ Token INSEE obtenu');
-      return this.accessToken;
-
-    } catch (error) {
-      console.error('❌ Erreur authentification INSEE:', error.message);
-      throw new Error('Impossible d\'obtenir le token INSEE');
-    }
+    return {
+      'X-INSEE-Api-Key-Integration': this.apiKey,
+      'Accept': 'application/json'
+    };
   }
 
   /**
@@ -90,23 +70,19 @@ class SireneService {
     return await cacheService.getOrSet(cacheKey, async () => {
       await cacheService.waitForRateLimit('sirene');
 
-      const token = await this.getAccessToken();
-
       try {
         const response = await this.client.get(`/siret/${siret}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json'
-          }
+          headers: this.getAuthHeaders()
         });
 
+        console.log('✅ Données SIRENE récupérées pour SIRET:', siret);
         return this.formatSiretData(response.data);
 
       } catch (error) {
         if (error.response?.status === 404) {
           throw new Error('SIRET non trouvé');
         }
-        console.error('Erreur API SIRENE:', error.message);
+        console.error('❌ Erreur API SIRENE:', error.message);
         throw new Error('Erreur lors de la récupération des données SIRENE');
       }
     }, 86400); // Cache 24h
@@ -127,23 +103,19 @@ class SireneService {
     return await cacheService.getOrSet(cacheKey, async () => {
       await cacheService.waitForRateLimit('sirene');
 
-      const token = await this.getAccessToken();
-
       try {
         const response = await this.client.get(`/siren/${siren}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json'
-          }
+          headers: this.getAuthHeaders()
         });
 
+        console.log('✅ Données SIRENE récupérées pour SIREN:', siren);
         return this.formatSirenData(response.data);
 
       } catch (error) {
         if (error.response?.status === 404) {
           throw new Error('SIREN non trouvé');
         }
-        console.error('Erreur API SIRENE:', error.message);
+        console.error('❌ Erreur API SIRENE:', error.message);
         throw new Error('Erreur lors de la récupération des données SIRENE');
       }
     }, 86400); // Cache 24h
@@ -169,22 +141,18 @@ class SireneService {
     return await cacheService.getOrSet(cacheKey, async () => {
       await cacheService.waitForRateLimit('sirene');
 
-      const token = await this.getAccessToken();
-
       try {
         const response = await this.client.get('/siret', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json'
-          },
+          headers: this.getAuthHeaders(),
           params: Object.fromEntries(params)
         });
 
         const etablissements = response.data.etablissements || [];
+        console.log(`✅ Recherche SIRENE: ${etablissements.length} résultats trouvés`);
         return etablissements.map(etab => this.formatSiretData({ etablissement: etab }));
 
       } catch (error) {
-        console.error('Erreur recherche SIRENE:', error.message);
+        console.error('❌ Erreur recherche SIRENE:', error.message);
         return [];
       }
     }, 3600); // Cache 1h pour les recherches

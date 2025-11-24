@@ -13,7 +13,7 @@ const Users = () => {
   const [newUser, setNewUser] = useState({
     username: '',
     password: '',
-    role: 'agent',
+    role: 'telepro',
     allowed_ip: '',
     ip_restriction_enabled: false
   });
@@ -40,7 +40,7 @@ const Users = () => {
       setNewUser({
         username: '',
         password: '',
-        role: 'agent',
+        role: 'telepro',
         allowed_ip: '',
         ip_restriction_enabled: false
       });
@@ -86,11 +86,11 @@ const Users = () => {
                 </div>
                 <div className={styles.userInfo}>
                   <h3 className={styles.username}>{user.username}</h3>
-                  <div className={`${styles.badge} ${user.role === 'admin' ? styles.badgeAdmin : styles.badgeAgent}`}>
+                  <div className={`${styles.badge} ${user.role === 'admin' ? styles.badgeAdmin : styles.badgeTéléprospecteur}`}>
                     {user.role === 'admin' ? (
                       <><Shield size={14} /> Administrateur</>
                     ) : (
-                      <><User size={14} /> Agent</>
+                      <><User size={14} /> Téléprospecteur</>
                     )}
                   </div>
                 </div>
@@ -160,13 +160,13 @@ const Users = () => {
                   value={newUser.role}
                   onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
                 >
-                  <option value="agent">Agent (Telepro)</option>
+                  <option value="telepro">Téléprospecteur (Telepro)</option>
                   <option value="admin">Administrateur</option>
                 </select>
               </div>
 
               {/* Section Restriction IP - Uniquement pour les agents */}
-              {newUser.role === 'agent' && (
+              {newUser.role === 'telepro' && (
                 <>
                   <div className={styles.inputGroup}>
                     <label className={styles.checkboxLabel}>

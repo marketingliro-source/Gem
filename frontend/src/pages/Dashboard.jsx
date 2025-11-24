@@ -1,60 +1,95 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Users, Mail, FileText, XCircle, Download } from 'lucide-react';
+import { PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Users, TrendingUp, Package } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import DateRangeSelector from '../components/DateRangeSelector';
-import AgentPerformanceTable from '../components/AgentPerformanceTable';
-import AgentTrendChart from '../components/AgentTrendChart';
 import styles from './Dashboard.module.css';
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
-  const [agentsData, setAgentsData] = useState([]);
-  const [personalData, setPersonalData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState({ period: 'month', start_date: null, end_date: null });
+  const [period, setPeriod] = useState('month');
+  const [statType, setStatType] = useState('clients'); // 'clients' or 'conversion'
+  const [selectedTelepro, setSelectedTelepro] = useState('all'); // 'all' or username
+
+  // Définition des 10 statuts avec couleurs
+  const STATUTS = [
+    { key: 'nouveau', label: 'Nouveau', color: '#10b981' },
+    { key: 'a_rappeler', label: 'À Rappeler', color: '#f59e0b' },
+    { key: 'mail_infos_envoye', label: 'Mail Infos Envoyé', color: '#3b82f6' },
+    { key: 'infos_recues', label: 'Infos Reçues', color: '#8b5cf6' },
+    { key: 'devis_envoye', label: 'Devis Envoyé', color: '#ec4899' },
+    { key: 'devis_signe', label: 'Devis Signé', color: '#14b8a6' },
+    { key: 'pose_prevue', label: 'Pose Prévue', color: '#f97316' },
+    { key: 'pose_terminee', label: 'Pose Terminée', color: '#06b6d4' },
+    { key: 'coffrac', label: 'Coffrac', color: '#84cc16' },
+    { key: 'termine', label: 'Terminé', color: '#059669' }
+  ];
+
+  const PRODUITS = [
+    { key: 'destratification', label: 'Destratification', color: '#10b981' },
+    { key: 'pression', label: 'Pression', color: '#8b5cf6' },
+    { key: 'matelas_isolants', label: 'Matelas Isolants', color: '#f59e0b' }
+  ];
+
+  // Couleurs dynamiques pour les télépros
+  const TELEPRO_COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#14b8a6', '#f97316'];
+
+  const getTeleproColor = (index) => {
+    return TELEPRO_COLORS[index % TELEPRO_COLORS.length];
+  };
+
+  // Generate months from January 2025 to current month and fill missing data with 0
+  const fillYearToDate = (data) => {
+    if (!data || data.length === 0) return [];
+
+    const months = [];
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth(); // 0-indexed (0 = January)
+
+    // Generate months from January of current year to current month
+    for (let i = 0; i <= currentMonth; i++) {
+      const monthKey = `${currentYear}-${String(i + 1).padStart(2, '0')}`;
+      months.push(monthKey);
+    }
+
+    // Get all telepro names from the data
+    const allTelepros = new Set();
+    data.forEach(row => {
+      Object.keys(row).forEach(key => {
+        if (key !== 'month') allTelepros.add(key);
+      });
+    });
+
+    // Create full dataset with all months from Jan to now
+    return months.map(month => {
+      const existingData = data.find(d => d.month === month);
+      if (existingData) {
+        return existingData;
+      } else {
+        // Fill missing month with 0 for all telepros
+        const emptyMonth = { month };
+        allTelepros.forEach(telepro => {
+          emptyMonth[telepro] = 0;
+        });
+        return emptyMonth;
+      }
+    });
+  };
 
   useEffect(() => {
     fetchAnalytics();
-  }, [dateRange, user]);
+  }, [period]);
 
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
-      console.log('🔍 Fetching analytics for user:', user);
-
-      // Build query params
-      const params = new URLSearchParams({ period: dateRange.period });
-      if (dateRange.start_date) params.append('start_date', dateRange.start_date);
-      if (dateRange.end_date) params.append('end_date', dateRange.end_date);
-
-      // Fetch general analytics (funnel, leads status, agent trends for admin)
-      console.log('📊 Fetching general analytics...');
-      const analyticsResponse = await api.get(`/analytics?${params.toString()}`);
-      console.log('Analytics response:', analyticsResponse.data);
-      setData(analyticsResponse.data);
-
-      // If admin, fetch all agents performance
-      if (user?.role === 'admin') {
-        const agentsResponse = await api.get(`/analytics/agents?${params.toString()}`);
-        console.log('Agents response:', agentsResponse.data);
-        setAgentsData(agentsResponse.data.agents || []);
-      }
-
-      // If agent, fetch personal performance data
-      if (user?.role === 'agent') {
-        const personalResponse = await api.get(`/analytics/agent/${user.id}?${params.toString()}`);
-        console.log('Personal data response:', personalResponse.data);
-        // Flatten the response structure to match the expected format
-        const flattenedData = {
-          ...personalResponse.data.agent,
-          teamAverage: personalResponse.data.teamAverage,
-          trendData: personalResponse.data.trend
-        };
-        setPersonalData(flattenedData);
-      }
+      const response = await api.get(`/analytics?period=${period}`);
+      setData(response.data);
     } catch (error) {
       console.error('Erreur lors du chargement des analytics:', error);
     } finally {
@@ -62,35 +97,14 @@ const Dashboard = () => {
     }
   };
 
-  const exportToExcel = async () => {
-    try {
-      // Build query params with period and date range
-      const params = new URLSearchParams({ period: dateRange.period });
-      if (dateRange.start_date) params.append('start_date', dateRange.start_date);
-      if (dateRange.end_date) params.append('end_date', dateRange.end_date);
+  const handleStatutClick = (statut) => {
+    // Naviguer vers la page clients filtrée par statut
+    navigate(`/clients?statut=${statut}`);
+  };
 
-      const response = await api.get(`/analytics/export/excel?${params.toString()}`, {
-        responseType: 'blob'
-      });
-
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-
-      const date = new Date().toISOString().split('T')[0];
-      const fileName = user?.role === 'admin'
-        ? `analytics_admin_${dateRange.period}_${date}.xlsx`
-        : `analytics_${user?.username}_${dateRange.period}_${date}.xlsx`;
-
-      link.setAttribute('download', fileName);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Erreur lors de l\'export:', error);
-      alert('Erreur lors de l\'export Excel');
-    }
+  const handleProduitClick = (produit) => {
+    // Naviguer vers la page clients filtrée par produit
+    navigate(`/clients/${produit}`);
   };
 
   if (loading) {
@@ -98,318 +112,386 @@ const Dashboard = () => {
   }
 
   if (!data) {
-    return <div className={styles.error}>Erreur lors du chargement des données</div>;
+    return <div className={styles.error}>Aucune donnée disponible</div>;
   }
 
-  const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
-  const funnelData = data.charts.trackingData;
-  const statusData = data.charts.leadsStatus;
+  // Préparer les données pour les cartes de statuts
+  const statutsData = STATUTS.map(statut => {
+    const count = data.summary?.par_statut?.find(s => s.statut === statut.key)?.count || 0;
+    return { ...statut, count };
+  });
 
-  // ADMIN VIEW
-  if (user?.role === 'admin') {
-    return (
-      <div className={styles.container}>
-        <div className={styles.header}>
-          <h1 className={styles.title}>
-            <TrendingUp size={32} /> Tableau de bord
-          </h1>
-          <div className={styles.controls}>
-            <DateRangeSelector value={dateRange} onChange={setDateRange} />
-            <button onClick={exportToExcel} className={styles.exportBtn}>
-              <Download size={18} />
-              Exporter Excel
-            </button>
-          </div>
+  // Préparer les données pour les produits
+  const produitsData = PRODUITS.map(produit => {
+    const count = data.summary?.par_produit?.find(p => p.type_produit === produit.key)?.count || 0;
+    return { ...produit, count };
+  });
+
+  return (
+    <div className={styles.dashboard}>
+      <div className={styles.header}>
+        <div>
+          <h1 className={styles.title}>Dashboard Gem Isolation</h1>
+          <p className={styles.subtitle}>
+            Bienvenue {user?.username} - {user?.role === 'admin' ? 'Administrateur' : 'Téléprospecteur'}
+          </p>
         </div>
-
-        {/* Summary Cards - Hide Leads from display */}
-        <div className={styles.summaryGrid}>
-          <div className={styles.card}>
-            <div className={styles.cardIcon} style={{background: 'rgba(16, 185, 129, 0.1)'}}>
-              <Users size={24} style={{color: '#10b981'}} />
-            </div>
-            <div className={styles.cardContent}>
-              <div className={styles.cardValue}>{data.summary.totalClients}</div>
-              <div className={styles.cardLabel}>Clients</div>
-            </div>
-          </div>
-
-          <div className={styles.card}>
-            <div className={styles.cardIcon} style={{background: 'rgba(245, 158, 11, 0.1)'}}>
-              <Mail size={24} style={{color: '#f59e0b'}} />
-            </div>
-            <div className={styles.cardContent}>
-              <div className={styles.cardValue}>{data.summary.mailSent}</div>
-              <div className={styles.cardLabel}>Courriers envoyés</div>
-            </div>
-          </div>
-
-          <div className={styles.card}>
-            <div className={styles.cardIcon} style={{background: 'rgba(16, 185, 129, 0.1)'}}>
-              <FileText size={24} style={{color: '#10b981'}} />
-            </div>
-            <div className={styles.cardContent}>
-              <div className={styles.cardValue}>{data.summary.documentReceived}</div>
-              <div className={styles.cardLabel}>Documents reçus</div>
-            </div>
-          </div>
-
-          <div className={styles.card}>
-            <div className={styles.cardIcon} style={{background: 'rgba(239, 68, 68, 0.1)'}}>
-              <XCircle size={24} style={{color: '#ef4444'}} />
-            </div>
-            <div className={styles.cardContent}>
-              <div className={styles.cardValue}>{data.summary.cancelled}</div>
-              <div className={styles.cardLabel}>Annulés</div>
-              <div className={styles.cardSubtext}>{data.summary.cancellationRate}% du total</div>
-            </div>
-          </div>
-
-          <div className={styles.card}>
-            <div className={styles.cardIcon} style={{background: 'rgba(139, 92, 246, 0.1)'}}>
-              <TrendingUp size={24} style={{color: '#8b5cf6'}} />
-            </div>
-            <div className={styles.cardContent}>
-              <div className={styles.cardValue}>{data.summary.conversionRate}%</div>
-              <div className={styles.cardLabel}>Taux de conversion</div>
-              <div className={styles.cardSubtext}>Leads → Clients</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Agent Performance Table */}
-        <AgentPerformanceTable agents={agentsData} period={dateRange.period} />
-
-        {/* Agent Trends Line Chart */}
-        {data.agentTrendData && Object.keys(data.agentTrendData).length > 0 && (
-          <AgentTrendChart
-            agentTrendData={data.agentTrendData}
-            agents={agentsData}
-            title="Évolution des performances par agent"
-          />
-        )}
-
-        {/* Charts Grid */}
-        <div className={styles.chartsGrid}>
-          {/* Funnel / Tracking Progression */}
-          <div className={styles.chartCard}>
-            <h3 className={styles.chartTitle}>Entonnoir de conversion</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={funnelData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                <XAxis type="number" stroke="#999" />
-                <YAxis dataKey="name" type="category" width={150} stroke="#999" />
-                <Tooltip contentStyle={{background: '#1e1e1e', border: '1px solid #333'}} />
-                <Bar dataKey="value" fill="#10b981">
-                  {funnelData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Leads Status Distribution */}
-          <div className={styles.chartCard}>
-            <h3 className={styles.chartTitle}>Statut des leads</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={statusData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={(entry) => `${entry.status}: ${entry.count}`}
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="count"
-                >
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{background: '#1e1e1e', border: '1px solid #333'}} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+        <div className={styles.periodSelector}>
+          <label htmlFor="period">Période: </label>
+          <select
+            id="period"
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            className={styles.periodDropdown}
+          >
+            <option value="day">Aujourd'hui</option>
+            <option value="week">7 derniers jours</option>
+            <option value="month">30 derniers jours</option>
+            <option value="year">12 derniers mois</option>
+          </select>
         </div>
       </div>
-    );
-  }
 
-  // AGENT VIEW
-  if (user?.role === 'agent' && personalData) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.header}>
-          <h1 className={styles.title}>
-            <TrendingUp size={32} /> Ma Performance
-          </h1>
-          <div className={styles.controls}>
-            <DateRangeSelector value={dateRange} onChange={setDateRange} />
-            <button onClick={exportToExcel} className={styles.exportBtn}>
-              <Download size={18} />
-              Exporter Excel
-            </button>
+      {/* Statistiques globales */}
+      <div className={styles.summaryCards}>
+        <div className={styles.summaryCard} style={{ borderLeft: '4px solid #10b981' }}>
+          <div className={styles.summaryIcon} style={{ backgroundColor: '#10b98120' }}>
+            <Users size={24} color="#10b981" />
+          </div>
+          <div className={styles.summaryContent}>
+            <div className={styles.summaryLabel}>Total Clients</div>
+            <div className={styles.summaryValue}>{data.summary?.totalClients || 0}</div>
           </div>
         </div>
 
-        {/* Personal Metrics Cards */}
-        <div className={styles.summaryGrid}>
-          <div className={styles.card}>
-            <div className={styles.cardIcon} style={{background: 'rgba(16, 185, 129, 0.1)'}}>
-              <Users size={24} style={{color: '#10b981'}} />
-            </div>
-            <div className={styles.cardContent}>
-              <div className={styles.cardValue}>{personalData.total_clients}</div>
-              <div className={styles.cardLabel}>Mes Clients</div>
-              <div className={styles.cardSubtext}>
-                Moy. équipe: {personalData.teamAverage?.avg_clients?.toFixed(1) || 'N/A'}
+        {PRODUITS.map(produit => {
+          const count = data.summary?.par_produit?.find(p => p.type_produit === produit.key)?.count || 0;
+          return (
+            <div
+              key={produit.key}
+              className={styles.summaryCard}
+              style={{ borderLeft: `4px solid ${produit.color}`, cursor: 'pointer' }}
+              onClick={() => handleProduitClick(produit.key)}
+            >
+              <div className={styles.summaryIcon} style={{ backgroundColor: `${produit.color}20` }}>
+                <Package size={24} color={produit.color} />
+              </div>
+              <div className={styles.summaryContent}>
+                <div className={styles.summaryLabel}>{produit.label}</div>
+                <div className={styles.summaryValue}>{count}</div>
               </div>
             </div>
-          </div>
+          );
+        })}
+      </div>
 
-          <div className={styles.card}>
-            <div className={styles.cardIcon} style={{background: 'rgba(245, 158, 11, 0.1)'}}>
-              <Mail size={24} style={{color: '#f59e0b'}} />
-            </div>
-            <div className={styles.cardContent}>
-              <div className={styles.cardValue}>{personalData.mail_sent}</div>
-              <div className={styles.cardLabel}>Courriers envoyés</div>
-              <div className={styles.cardSubtext}>{personalData.mail_sent_rate}% de mes clients</div>
-            </div>
-          </div>
-
-          <div className={styles.card}>
-            <div className={styles.cardIcon} style={{background: 'rgba(16, 185, 129, 0.1)'}}>
-              <FileText size={24} style={{color: '#10b981'}} />
-            </div>
-            <div className={styles.cardContent}>
-              <div className={styles.cardValue}>{personalData.document_received}</div>
-              <div className={styles.cardLabel}>Documents reçus</div>
-              <div className={styles.cardSubtext}>{personalData.document_received_rate}% de mes clients</div>
-            </div>
-          </div>
-
-          <div className={styles.card}>
-            <div className={styles.cardIcon} style={{background: 'rgba(239, 68, 68, 0.1)'}}>
-              <XCircle size={24} style={{color: '#ef4444'}} />
-            </div>
-            <div className={styles.cardContent}>
-              <div className={styles.cardValue}>{personalData.cancelled}</div>
-              <div className={styles.cardLabel}>Annulés</div>
-              <div className={styles.cardSubtext}>{personalData.cancellation_rate}% de mes clients</div>
-            </div>
-          </div>
-
-          <div className={styles.card}>
-            <div className={styles.cardIcon} style={{background: 'rgba(139, 92, 246, 0.1)'}}>
-              <TrendingUp size={24} style={{color: '#8b5cf6'}} />
-            </div>
-            <div className={styles.cardContent}>
-              <div className={styles.cardValue}>{personalData.conversion_rate}%</div>
-              <div className={styles.cardLabel}>Taux de conversion</div>
-              <div className={styles.cardSubtext}>Leads → Clients</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Personal Trend Chart */}
-        {personalData.trendData && personalData.trendData.length > 0 && (
-          <AgentTrendChart
-            agentTrendData={{[user.username]: personalData.trendData}}
-            title="Évolution de mes performances"
-          />
-        )}
-
-        {/* Team Comparison Card */}
-        {personalData.teamAverage && (
-          <div className={styles.comparisonCard}>
-            <h3 className={styles.chartTitle}>Comparaison avec l'équipe</h3>
-            <div className={styles.comparisonGrid}>
-              <div className={styles.comparisonItem}>
-                <div className={styles.comparisonLabel}>Taux Courriers</div>
-                <div className={styles.comparisonValues}>
-                  <span className={styles.myValue}>{personalData.mail_sent_rate}%</span>
-                  <span className={styles.separator}>vs</span>
-                  <span className={styles.avgValue}>
-                    {personalData.teamAverage.avg_mail_rate?.toFixed(1)}%
-                  </span>
-                </div>
-              </div>
-              <div className={styles.comparisonItem}>
-                <div className={styles.comparisonLabel}>Taux Documents</div>
-                <div className={styles.comparisonValues}>
-                  <span className={styles.myValue}>{personalData.document_received_rate}%</span>
-                  <span className={styles.separator}>vs</span>
-                  <span className={styles.avgValue}>
-                    {personalData.teamAverage.avg_doc_rate?.toFixed(1)}%
-                  </span>
-                </div>
-              </div>
-              <div className={styles.comparisonItem}>
-                <div className={styles.comparisonLabel}>Taux Annulation</div>
-                <div className={styles.comparisonValues}>
-                  <span className={styles.myValue}>{personalData.cancellation_rate}%</span>
-                  <span className={styles.separator}>vs</span>
-                  <span className={styles.avgValue}>
-                    {personalData.teamAverage.avg_cancel_rate?.toFixed(1)}%
-                  </span>
+      {/* Cartes de statuts cliquables */}
+      <div className={styles.section}>
+        <h2 className={styles.sectionTitle}>Statuts des Clients</h2>
+        <div className={styles.statutsGrid}>
+          {statutsData.map(statut => (
+            <div
+              key={statut.key}
+              className={styles.statutCard}
+              style={{
+                borderLeft: `4px solid ${statut.color}`,
+                cursor: 'pointer',
+                transition: 'all 0.3s ease'
+              }}
+              onClick={() => handleStatutClick(statut.key)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-4px)';
+                e.currentTarget.style.boxShadow = '0 8px 16px rgba(0,0,0,0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              <div className={styles.statutContent}>
+                <div className={styles.statutLabel}>{statut.label}</div>
+                <div className={styles.statutCount} style={{ color: statut.color }}>
+                  {statut.count}
                 </div>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Charts Grid */}
-        <div className={styles.chartsGrid}>
-          {/* Funnel */}
-          <div className={styles.chartCard}>
-            <h3 className={styles.chartTitle}>Entonnoir de conversion</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={funnelData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                <XAxis type="number" stroke="#999" />
-                <YAxis dataKey="name" type="category" width={150} stroke="#999" />
-                <Tooltip contentStyle={{background: '#1e1e1e', border: '1px solid #333'}} />
-                <Bar dataKey="value" fill="#10b981">
-                  {funnelData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Leads Status */}
-          <div className={styles.chartCard}>
-            <h3 className={styles.chartTitle}>Statut de mes leads</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={statusData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={(entry) => `${entry.status}: ${entry.count}`}
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="count"
-                >
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{background: '#1e1e1e', border: '1px solid #333'}} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          ))}
         </div>
       </div>
-    );
-  }
 
-  return null;
+      {/* Graphiques */}
+      <div className={styles.chartsSection}>
+        {/* Distribution par statut */}
+        <div className={styles.chartCard} style={{ gridColumn: '1 / -1' }}>
+          <h3 className={styles.chartTitle}>Distribution par Statut</h3>
+          <ResponsiveContainer width="100%" height={350}>
+            <PieChart>
+              <Pie
+                data={data.summary?.par_statut || []}
+                dataKey="count"
+                nameKey="statut"
+                cx="50%"
+                cy="50%"
+                outerRadius={120}
+                label={(entry) => {
+                  const statut = STATUTS.find(s => s.key === entry.statut);
+                  return `${statut?.label}: ${entry.count}`;
+                }}
+              >
+                {(data.summary?.par_statut || []).map((entry, index) => {
+                  const statut = STATUTS.find(s => s.key === entry.statut);
+                  return <Cell key={`cell-${index}`} fill={statut?.color || '#999'} />;
+                })}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Distribution par produit */}
+        <div className={styles.chartCard} style={{ gridColumn: '1 / -1' }}>
+          <h3 className={styles.chartTitle}>Distribution par Produit</h3>
+          <ResponsiveContainer width="100%" height={350}>
+            <BarChart data={data.summary?.par_produit || []}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis
+                dataKey="type_produit"
+                tickFormatter={(value) => {
+                  const produit = PRODUITS.find(p => p.key === value);
+                  return produit?.label || value;
+                }}
+              />
+              <YAxis />
+              <Tooltip
+                labelFormatter={(value) => {
+                  const produit = PRODUITS.find(p => p.key === value);
+                  return produit?.label || value;
+                }}
+              />
+              <Bar dataKey="count">
+                {(data.summary?.par_produit || []).map((entry, index) => {
+                  const produit = PRODUITS.find(p => p.key === entry.type_produit);
+                  return <Cell key={`cell-${index}`} fill={produit?.color || '#999'} />;
+                })}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Statistiques Télépros (12 derniers mois) */}
+        {user?.role === 'admin' && data.charts?.teleproMonthlyStats && (
+          <div className={styles.chartCard} style={{ gridColumn: '1 / -1' }}>
+            <div className={styles.chartHeader}>
+              <h3 className={styles.chartTitle}>Statistiques Téléprospecteurs (depuis janvier {new Date().getFullYear()})</h3>
+              <div className={styles.chartControls}>
+                <select
+                  value={statType}
+                  onChange={(e) => setStatType(e.target.value)}
+                  className={styles.chartSelect}
+                >
+                  <option value="clients">Nombre de clients par mois</option>
+                  <option value="conversion">Taux de conversion (%)</option>
+                </select>
+                <select
+                  value={selectedTelepro}
+                  onChange={(e) => setSelectedTelepro(e.target.value)}
+                  className={styles.chartSelect}
+                >
+                  <option value="all">Tous les télépros</option>
+                  {data.charts?.teleproPerformance?.map((t) => (
+                    <option key={t.username} value={t.username}>{t.username}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={350}>
+              {(() => {
+                const rawData = statType === 'clients' ? data.charts.teleproMonthlyStats : data.charts.teleproConversionStats;
+                const filledData = fillYearToDate(rawData);
+
+                if (!filledData || filledData.length === 0) {
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '350px', color: 'var(--text-secondary)' }}>
+                      Aucune donnée disponible depuis janvier {new Date().getFullYear()}
+                    </div>
+                  );
+                }
+
+                const telepros = Object.keys(filledData[0]).filter(k => k !== 'month');
+
+                return (
+                  <LineChart data={filledData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="month"
+                      tickFormatter={(value) => {
+                        const [year, month] = value.split('-');
+                        return `${month}/${year.slice(2)}`;
+                      }}
+                    />
+                    <YAxis />
+                    <Tooltip
+                      labelFormatter={(value) => {
+                        const [year, month] = value.split('-');
+                        const date = new Date(year, month - 1);
+                        return date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+                      }}
+                    />
+                    <Legend />
+                    {telepros
+                      .filter(username => selectedTelepro === 'all' || username === selectedTelepro)
+                      .map((username, index) => (
+                        <Line
+                          key={username}
+                          type="monotone"
+                          dataKey={username}
+                          stroke={getTeleproColor(index)}
+                          strokeWidth={2}
+                          name={username}
+                          dot={{ fill: getTeleproColor(index), r: 4 }}
+                          activeDot={{ r: 6 }}
+                          connectNulls
+                        />
+                      ))}
+                  </LineChart>
+                );
+              })()}
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      {/* Activité récente */}
+      {data.recentClients && data.recentClients.length > 0 && (
+        <div className={styles.section}>
+          <h2 className={styles.sectionTitle}>Clients Récents</h2>
+          <div className={styles.recentTable}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Société</th>
+                  <th>Contact</th>
+                  <th>Produit</th>
+                  <th>Statut</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.recentClients.map(client => {
+                  const statut = STATUTS.find(s => s.key === client.statut);
+                  const produit = PRODUITS.find(p => p.key === client.type_produit);
+                  return (
+                    <tr key={client.id} onClick={() => navigate(`/clients?id=${client.id}`)} style={{ cursor: 'pointer' }}>
+                      <td>{client.societe || '-'}</td>
+                      <td>{client.nom_signataire || '-'}</td>
+                      <td>
+                        <span
+                          className={styles.badge}
+                          style={{ backgroundColor: `${produit?.color}20`, color: produit?.color }}
+                        >
+                          {produit?.label || client.type_produit}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={styles.badge}
+                          style={{ backgroundColor: `${statut?.color}20`, color: statut?.color }}
+                        >
+                          {statut?.label || client.statut}
+                        </span>
+                      </td>
+                      <td>{new Date(client.created_at).toLocaleDateString('fr-FR')}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Mes Objectifs (telepro only) */}
+      {user?.role === 'telepro' && (
+        <div className={styles.section}>
+          <h2 className={styles.sectionTitle}>Mes Objectifs</h2>
+          <div className={styles.objectifsGrid}>
+            <div className={styles.objectifCard}>
+              <div className={styles.objectifLabel}>Total Clients</div>
+              <div className={styles.objectifValue}>{data.summary?.totalClients || 0}</div>
+              <div className={styles.objectifSubtext}>clients assignés</div>
+            </div>
+            <div className={styles.objectifCard}>
+              <div className={styles.objectifLabel}>Terminés</div>
+              <div className={styles.objectifValue} style={{ color: '#059669' }}>
+                {statutsData.find(s => s.key === 'termine')?.count || 0}
+              </div>
+              <div className={styles.objectifSubtext}>
+                {data.summary?.totalClients > 0 ?
+                  `${((statutsData.find(s => s.key === 'termine')?.count || 0) / data.summary.totalClients * 100).toFixed(1)}%`
+                  : '0%'} de conversion
+              </div>
+            </div>
+            <div className={styles.objectifCard}>
+              <div className={styles.objectifLabel}>À Rappeler</div>
+              <div className={styles.objectifValue} style={{ color: '#f59e0b' }}>
+                {statutsData.find(s => s.key === 'a_rappeler')?.count || 0}
+              </div>
+              <div className={styles.objectifSubtext}>clients à relancer</div>
+            </div>
+            <div className={styles.objectifCard}>
+              <div className={styles.objectifLabel}>En Cours</div>
+              <div className={styles.objectifValue} style={{ color: '#3b82f6' }}>
+                {data.summary?.totalClients - (statutsData.find(s => s.key === 'termine')?.count || 0) || 0}
+              </div>
+              <div className={styles.objectifSubtext}>dossiers actifs</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Performance des téléprospecteurs (admin only) */}
+      {user?.role === 'admin' && data.charts?.teleproPerformance && data.charts.teleproPerformance.length > 0 && (
+        <div className={styles.section}>
+          <h2 className={styles.sectionTitle}>Performance des Téléprospecteurs</h2>
+          <div className={styles.performanceTable}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Téléprospecteur</th>
+                  <th>Total Clients</th>
+                  <th>Terminés</th>
+                  <th>Taux de Réussite</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.charts.teleproPerformance.map(telepro => (
+                  <tr key={telepro.id}>
+                    <td><strong>{telepro.username}</strong></td>
+                    <td>{telepro.client_count}</td>
+                    <td>{telepro.termine_count}</td>
+                    <td>
+                      <div className={styles.progressBar}>
+                        <div
+                          className={styles.progressFill}
+                          style={{
+                            width: `${telepro.client_count > 0 ? (telepro.termine_count / telepro.client_count * 100) : 0}%`,
+                            backgroundColor: '#10b981'
+                          }}
+                        />
+                        <span className={styles.progressText}>
+                          {telepro.client_count > 0 ? ((telepro.termine_count / telepro.client_count) * 100).toFixed(1) : 0}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default Dashboard;

@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
-import { X, MessageSquare, Calendar, Send, User, Save } from 'lucide-react';
-import styles from './LeadModal.module.css';
+import { X, MessageSquare, Calendar, Send, User, Save, CheckCircle, Mail, FileText, XCircle, Phone, Calculator } from 'lucide-react';
+import styles from './ClientModal.module.css';
+import DimensioningModal from './DimensioningModal';
 
-const LeadModal = ({ lead, onClose }) => {
+const ClientModal = ({ client, onClose }) => {
+  const { user } = useAuth();
   const [comments, setComments] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [newComment, setNewComment] = useState('');
@@ -14,26 +17,29 @@ const LeadModal = ({ lead, onClose }) => {
   });
   const [activeTab, setActiveTab] = useState('info');
   const [editMode, setEditMode] = useState(false);
-  const [leadInfo, setLeadInfo] = useState({
-    first_name: lead.first_name || '',
-    last_name: lead.last_name || '',
-    email: lead.email || '',
-    phone: lead.phone || '',
-    address: lead.address || '',
-    mobile_phone: lead.mobile_phone || '',
-    country: lead.country || '',
-    city: lead.city || '',
-    postal_code: lead.postal_code || ''
+  const [clientInfo, setClientInfo] = useState({
+    first_name: client.first_name || '',
+    last_name: client.last_name || '',
+    email: client.email || '',
+    address: client.address || '',
+    city: client.city || '',
+    postal_code: client.postal_code || '',
+    landline_phone: client.landline_phone || '',
+    mobile_phone: client.mobile_phone || '',
+    mail_sent: client.mail_sent || false,
+    document_received: client.document_received || false,
+    cancelled: client.cancelled || false
   });
+  const [showDimensioningModal, setShowDimensioningModal] = useState(false);
 
   useEffect(() => {
     fetchComments();
     fetchAppointments();
-  }, [lead]);
+  }, [client]);
 
   const fetchComments = async () => {
     try {
-      const response = await api.get(`/comments/lead/${lead.id}`);
+      const response = await api.get(`/clients/${client.id}/comments`);
       setComments(response.data);
     } catch (error) {
       console.error('Erreur lors du chargement des commentaires:', error);
@@ -42,7 +48,7 @@ const LeadModal = ({ lead, onClose }) => {
 
   const fetchAppointments = async () => {
     try {
-      const response = await api.get(`/appointments/lead/${lead.id}`);
+      const response = await api.get(`/clients/${client.id}/appointments`);
       setAppointments(response.data);
     } catch (error) {
       console.error('Erreur lors du chargement des RDV:', error);
@@ -54,8 +60,7 @@ const LeadModal = ({ lead, onClose }) => {
     if (!newComment.trim()) return;
 
     try {
-      await api.post('/comments', {
-        lead_id: lead.id,
+      await api.post(`/clients/${client.id}/comments`, {
         content: newComment
       });
       setNewComment('');
@@ -70,8 +75,7 @@ const LeadModal = ({ lead, onClose }) => {
     if (!newAppointment.title || !newAppointment.date || !newAppointment.time) return;
 
     try {
-      await api.post('/appointments', {
-        lead_id: lead.id,
+      await api.post(`/clients/${client.id}/appointments`, {
         ...newAppointment
       });
       setNewAppointment({ title: '', date: '', time: '' });
@@ -85,7 +89,7 @@ const LeadModal = ({ lead, onClose }) => {
     if (!confirm('Supprimer ce commentaire ?')) return;
 
     try {
-      await api.delete(`/comments/${commentId}`);
+      await api.delete(`/clients/${client.id}/comments/${commentId}`);
       fetchComments();
     } catch (error) {
       alert('Erreur lors de la suppression');
@@ -96,36 +100,37 @@ const LeadModal = ({ lead, onClose }) => {
     if (!confirm('Supprimer ce RDV ?')) return;
 
     try {
-      await api.delete(`/appointments/${appointmentId}`);
+      await api.delete(`/clients/${client.id}/appointments/${appointmentId}`);
       fetchAppointments();
     } catch (error) {
       alert('Erreur lors de la suppression');
     }
   };
 
-  const handleSaveLeadInfo = async (e) => {
-    e.preventDefault();
-    try {
-      await api.patch(`/leads/${lead.id}`, leadInfo);
-      setEditMode(false);
-      alert('Informations mises à jour');
-      onClose(); // Ferme et rafraîchit
-    } catch (error) {
-      alert('Erreur lors de la mise à jour');
+  const handleTrackingChange = (field) => {
+    // For agents: can only check (not uncheck)
+    // For admins: can toggle
+    if (user.role === 'agent' && clientInfo[field]) {
+      return; // Agent cannot uncheck
+    }
+    setClientInfo({
+      ...clientInfo,
+      [field]: !clientInfo[field]
+    });
+    if (!editMode) {
+      setEditMode(true);
     }
   };
 
-  const handleConvertToClient = async () => {
-    if (!confirm(`Convertir "${lead.first_name} ${lead.last_name}" en client ?\n\nCela supprimera le lead et créera un nouveau client avec ses informations, commentaires et rendez-vous.`)) {
-      return;
-    }
-
+  const handleSaveClientInfo = async (e) => {
+    e.preventDefault();
     try {
-      const response = await api.post(`/clients/convert-from-lead/${lead.id}`);
-      alert('Lead converti en client avec succès !');
-      onClose(); // Ferme et rafraîchit
+      await api.patch(`/clients/${client.id}`, clientInfo);
+      setEditMode(false);
+      alert('Informations mises à jour');
+      onClose();
     } catch (error) {
-      alert('Erreur lors de la conversion');
+      alert('Erreur lors de la mise à jour');
     }
   };
 
@@ -134,17 +139,38 @@ const LeadModal = ({ lead, onClose }) => {
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <div>
-            <h2 className={styles.title}>
-              {lead.first_name} {lead.last_name}
-            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <h2 className={styles.title}>
+                {client.first_name} {client.last_name}
+              </h2>
+              {client.status && (
+                <span className={`${styles.statusBadge} ${styles[`status_${client.status}`]}`}>
+                  {client.status === 'nouveau' && '🆕 Nouveau client'}
+                  {client.status === 'mail_envoye' && '✉️ Mail envoyé'}
+                  {client.status === 'documents_recus' && '📄 Documents reçus'}
+                  {client.status === 'annule' && '❌ Annulé'}
+                </span>
+              )}
+            </div>
             <div className={styles.info}>
-              {lead.email && <span>{lead.email}</span>}
-              {lead.phone && <span>{lead.phone}</span>}
+              {client.email && <span>{client.email}</span>}
+              {client.phone && <span>{client.phone}</span>}
+              {client.city && <span>{client.city}</span>}
             </div>
           </div>
-          <button onClick={onClose} className={styles.closeBtn}>
-            <X size={24} />
-          </button>
+          <div className={styles.headerActions}>
+            <button
+              onClick={() => setShowDimensioningModal(true)}
+              className={styles.dimensioningBtn}
+              title="Générer une note de dimensionnement"
+            >
+              <Calculator size={20} />
+              Note de dimensionnement
+            </button>
+            <button onClick={onClose} className={styles.closeBtn}>
+              <X size={24} />
+            </button>
+          </div>
         </div>
 
         <div className={styles.tabs}>
@@ -175,7 +201,7 @@ const LeadModal = ({ lead, onClose }) => {
           {activeTab === 'info' ? (
             <div className={styles.infoTab}>
               <div className={styles.editHeader}>
-                <h3>Informations du lead</h3>
+                <h3>Informations du client</h3>
                 {!editMode ? (
                   <button onClick={() => setEditMode(true)} className={styles.editBtn}>
                     Modifier
@@ -183,13 +209,13 @@ const LeadModal = ({ lead, onClose }) => {
                 ) : null}
               </div>
 
-              <form onSubmit={handleSaveLeadInfo} className={styles.infoForm}>
+              <form onSubmit={handleSaveClientInfo} className={styles.infoForm}>
                 <div className={styles.formGroup}>
                   <label>Prénom *</label>
                   <input
                     type="text"
-                    value={leadInfo.first_name}
-                    onChange={(e) => setLeadInfo({...leadInfo, first_name: e.target.value})}
+                    value={clientInfo.first_name}
+                    onChange={(e) => setClientInfo({...clientInfo, first_name: e.target.value})}
                     disabled={!editMode}
                     required
                     className={styles.input}
@@ -200,8 +226,8 @@ const LeadModal = ({ lead, onClose }) => {
                   <label>Nom *</label>
                   <input
                     type="text"
-                    value={leadInfo.last_name}
-                    onChange={(e) => setLeadInfo({...leadInfo, last_name: e.target.value})}
+                    value={clientInfo.last_name}
+                    onChange={(e) => setClientInfo({...clientInfo, last_name: e.target.value})}
                     disabled={!editMode}
                     required
                     className={styles.input}
@@ -212,41 +238,19 @@ const LeadModal = ({ lead, onClose }) => {
                   <label>Email</label>
                   <input
                     type="email"
-                    value={leadInfo.email}
-                    onChange={(e) => setLeadInfo({...leadInfo, email: e.target.value})}
+                    value={clientInfo.email}
+                    onChange={(e) => setClientInfo({...clientInfo, email: e.target.value})}
                     disabled={!editMode}
                     className={styles.input}
                   />
                 </div>
 
                 <div className={styles.formGroup}>
-                  <label>Téléphone fixe</label>
-                  <input
-                    type="tel"
-                    value={leadInfo.phone}
-                    onChange={(e) => setLeadInfo({...leadInfo, phone: e.target.value})}
-                    disabled={!editMode}
-                    className={styles.input}
-                  />
-                </div>
-
-                <div className={styles.formGroup}>
-                  <label>Téléphone mobile</label>
-                  <input
-                    type="tel"
-                    value={leadInfo.mobile_phone}
-                    onChange={(e) => setLeadInfo({...leadInfo, mobile_phone: e.target.value})}
-                    disabled={!editMode}
-                    className={styles.input}
-                  />
-                </div>
-
-                <div className={styles.formGroup}>
-                  <label>Adresse complète</label>
+                  <label>Adresse</label>
                   <input
                     type="text"
-                    value={leadInfo.address}
-                    onChange={(e) => setLeadInfo({...leadInfo, address: e.target.value})}
+                    value={clientInfo.address}
+                    onChange={(e) => setClientInfo({...clientInfo, address: e.target.value})}
                     disabled={!editMode}
                     className={styles.input}
                   />
@@ -254,54 +258,118 @@ const LeadModal = ({ lead, onClose }) => {
 
                 <div className={styles.formRow}>
                   <div className={styles.formGroup}>
-                    <label>Pays</label>
+                    <label>Ville</label>
                     <input
                       type="text"
-                      value={leadInfo.country}
-                      onChange={(e) => setLeadInfo({...leadInfo, country: e.target.value})}
+                      value={clientInfo.city}
+                      onChange={(e) => setClientInfo({...clientInfo, city: e.target.value})}
                       disabled={!editMode}
                       className={styles.input}
-                      placeholder="France"
                     />
                   </div>
 
                   <div className={styles.formGroup}>
-                    <label>Ville</label>
+                    <label>Code postal</label>
                     <input
                       type="text"
-                      value={leadInfo.city}
-                      onChange={(e) => setLeadInfo({...leadInfo, city: e.target.value})}
+                      value={clientInfo.postal_code}
+                      onChange={(e) => setClientInfo({...clientInfo, postal_code: e.target.value})}
                       disabled={!editMode}
                       className={styles.input}
                     />
                   </div>
                 </div>
 
+                <div className={styles.separator}></div>
+
                 <div className={styles.formGroup}>
-                  <label>Code postal</label>
-                  <input
-                    type="text"
-                    value={leadInfo.postal_code}
-                    onChange={(e) => setLeadInfo({...leadInfo, postal_code: e.target.value})}
-                    disabled={!editMode}
-                    className={styles.input}
-                  />
+                  <label>
+                    <Phone size={16} /> Numéros de téléphone
+                  </label>
+                  <div className={styles.formRow}>
+                    <div className={styles.formGroup}>
+                      <label>Fixe</label>
+                      <input
+                        type="tel"
+                        value={clientInfo.landline_phone}
+                        onChange={(e) => setClientInfo({...clientInfo, landline_phone: e.target.value})}
+                        disabled={!editMode}
+                        placeholder="01 23 45 67 89"
+                        className={styles.input}
+                      />
+                    </div>
+
+                    <div className={styles.formGroup}>
+                      <label>Mobile</label>
+                      <input
+                        type="tel"
+                        value={clientInfo.mobile_phone}
+                        onChange={(e) => setClientInfo({...clientInfo, mobile_phone: e.target.value})}
+                        disabled={!editMode}
+                        placeholder="06 12 34 56 78"
+                        className={styles.input}
+                      />
+                    </div>
+                  </div>
                 </div>
+
+                <div className={styles.separator}></div>
+
+                <h4 className={styles.sectionTitle}>
+                  <CheckCircle size={18} /> Suivi du dossier
+                </h4>
+
+                <div className={styles.trackingGroup}>
+                  <label
+                    className={`${styles.trackingLabel} ${clientInfo.mail_sent ? styles.checked : ''}`}
+                    onClick={() => handleTrackingChange('mail_sent')}
+                  >
+                    <Mail size={18} />
+                    <span>Courrier envoyé</span>
+                    {clientInfo.mail_sent && <CheckCircle size={16} className={styles.checkIcon} />}
+                  </label>
+
+                  <label
+                    className={`${styles.trackingLabel} ${clientInfo.document_received ? styles.checked : ''}`}
+                    onClick={() => handleTrackingChange('document_received')}
+                  >
+                    <FileText size={18} />
+                    <span>Document reçu</span>
+                    {clientInfo.document_received && <CheckCircle size={16} className={styles.checkIcon} />}
+                  </label>
+
+                  <label
+                    className={`${styles.trackingLabel} ${clientInfo.cancelled ? styles.checked : ''} ${clientInfo.cancelled ? styles.cancelled : ''}`}
+                    onClick={() => handleTrackingChange('cancelled')}
+                  >
+                    <XCircle size={18} />
+                    <span>Annulé</span>
+                    {clientInfo.cancelled && <CheckCircle size={16} className={styles.checkIcon} />}
+                  </label>
+                </div>
+
+                {user.role === 'agent' && (
+                  <p className={styles.trackingHint}>
+                    💡 Vous pouvez cocher les cases mais pas les décocher. Contactez un administrateur pour modifier.
+                  </p>
+                )}
 
                 {editMode && (
                   <div className={styles.formActions}>
                     <button type="button" onClick={() => {
                       setEditMode(false);
-                      setLeadInfo({
-                        first_name: lead.first_name || '',
-                        last_name: lead.last_name || '',
-                        email: lead.email || '',
-                        phone: lead.phone || '',
-                        address: lead.address || '',
-                        mobile_phone: lead.mobile_phone || '',
-                        country: lead.country || '',
-                        city: lead.city || '',
-                        postal_code: lead.postal_code || ''
+                      setClientInfo({
+                        first_name: client.first_name || '',
+                        last_name: client.last_name || '',
+                        email: client.email || '',
+                        address: client.address || '',
+                        city: client.city || '',
+                        postal_code: client.postal_code || '',
+                        landline_phone: client.landline_phone || '',
+                        mobile_phone: client.mobile_phone || '',
+                        mail_sent: client.mail_sent || false,
+                        document_received: client.document_received || false,
+                        cancelled: client.cancelled || false
                       });
                     }} className={styles.cancelBtn}>
                       Annuler
@@ -312,17 +380,6 @@ const LeadModal = ({ lead, onClose }) => {
                   </div>
                 )}
               </form>
-
-              {!editMode && (
-                <div className={styles.convertSection}>
-                  <button onClick={handleConvertToClient} className={styles.convertBtn}>
-                    <User size={16} /> Convertir en Client
-                  </button>
-                  <p className={styles.convertInfo}>
-                    Transforme ce lead en client. Toutes les informations, commentaires et rendez-vous seront conservés.
-                  </p>
-                </div>
-              )}
             </div>
           ) : activeTab === 'comments' ? (
             <>
@@ -419,8 +476,15 @@ const LeadModal = ({ lead, onClose }) => {
           )}
         </div>
       </div>
+
+      {showDimensioningModal && (
+        <DimensioningModal
+          client={client}
+          onClose={() => setShowDimensioningModal(false)}
+        />
+      )}
     </div>
   );
 };
 
-export default LeadModal;
+export default ClientModal;

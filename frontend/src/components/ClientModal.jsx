@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
-import { X, Save, Upload, Download, Trash2, MessageSquare, Calendar, Send } from 'lucide-react';
+import { X, Save, Upload, Download, Trash2, MessageSquare, Calendar, Send, FileText, Eye } from 'lucide-react';
 import SiretAutocomplete from './SiretAutocomplete';
 import styles from './ClientModal.module.css';
 
@@ -16,6 +16,16 @@ const ClientModal = ({ client, onClose }) => {
   const [appointments, setAppointments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const [newAppointment, setNewAppointment] = useState({
+    title: '',
+    date: '',
+    time: '',
+    location: '',
+    notes: ''
+  });
+  const [previewDocument, setPreviewDocument] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
 
   const [formData, setFormData] = useState({
     // Bénéficiaire
@@ -66,17 +76,22 @@ const ClientModal = ({ client, onClose }) => {
   });
 
   const STATUTS = [
-    { key: 'nouveau', label: 'Nouveau' },
-    { key: 'nrp', label: 'NRP' },
-    { key: 'a_rappeler', label: 'À Rappeler' },
-    { key: 'mail_infos_envoye', label: 'Mail Infos Envoyé' },
-    { key: 'infos_recues', label: 'Infos Reçues' },
-    { key: 'devis_envoye', label: 'Devis Envoyé' },
-    { key: 'devis_signe', label: 'Devis Signé' },
-    { key: 'pose_prevue', label: 'Pose Prévue' },
-    { key: 'pose_terminee', label: 'Pose Terminée' },
-    { key: 'coffrac', label: 'Coffrac' },
-    { key: 'termine', label: 'Terminé' }
+    { key: 'nouveau', label: 'Nouveau', color: '#10b981' },
+    { key: 'a_rappeler', label: 'À Rappeler', color: '#f59e0b' },
+    { key: 'mail_infos_envoye', label: 'Mail Infos Envoyé', color: '#3b82f6' },
+    { key: 'infos_recues', label: 'Infos Reçues', color: '#8b5cf6' },
+    { key: 'devis_envoye', label: 'Devis Envoyé', color: '#ec4899' },
+    { key: 'devis_signe', label: 'Devis Signé', color: '#14b8a6' },
+    { key: 'pose_prevue', label: 'Pose Prévue', color: '#f97316' },
+    { key: 'pose_terminee', label: 'Pose Terminée', color: '#06b6d4' },
+    { key: 'coffrac', label: 'Coffrac', color: '#84cc16' },
+    { key: 'termine', label: 'Terminé', color: '#059669' }
+  ];
+
+  const PRODUITS = [
+    { key: 'destratification', label: 'Destratification', color: '#10b981' },
+    { key: 'pression', label: 'Pression', color: '#8b5cf6' },
+    { key: 'matelas_isolants', label: 'Matelas Isolants', color: '#f59e0b' }
   ];
 
   useEffect(() => {
@@ -89,7 +104,7 @@ const ClientModal = ({ client, onClose }) => {
 
   const fetchDocuments = async () => {
     try {
-      const response = await api.get(\`/documents/client/\${client.id}\`);
+      const response = await api.get(`/documents/client/${client.id}`);
       setDocuments(response.data);
     } catch (error) {
       console.error('Erreur chargement documents:', error);
@@ -98,7 +113,7 @@ const ClientModal = ({ client, onClose }) => {
 
   const fetchComments = async () => {
     try {
-      const response = await api.get(\`/clients/\${client.id}/comments\`);
+      const response = await api.get(`/clients/${client.id}/comments`);
       setComments(response.data);
     } catch (error) {
       console.error('Erreur chargement commentaires:', error);
@@ -107,7 +122,7 @@ const ClientModal = ({ client, onClose }) => {
 
   const fetchAppointments = async () => {
     try {
-      const response = await api.get(\`/clients/\${client.id}/appointments\`);
+      const response = await api.get(`/clients/${client.id}/appointments`);
       setAppointments(response.data);
     } catch (error) {
       console.error('Erreur chargement rendez-vous:', error);
@@ -201,7 +216,7 @@ const ClientModal = ({ client, onClose }) => {
       if (isNew) {
         await api.post('/clients', payload);
       } else {
-        await api.patch(\`/clients/\${client.id}\`, payload);
+        await api.patch(`/clients/${client.id}`, payload);
       }
 
       onClose(true); // Refresh la liste
@@ -214,20 +229,26 @@ const ClientModal = ({ client, onClose }) => {
   };
 
   const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    // Store count BEFORE clearing input
+    const fileCount = files.length;
 
     setUploadingFile(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
+      for (let file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
 
-      await api.post(\`/documents/upload/\${client.id}\`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+        await api.post(`/documents/upload/${client.id}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      }
 
       fetchDocuments();
-      e.target.value = '';
+      if (e.target) e.target.value = '';
+      alert(`${fileCount} document(s) ajouté(s) avec succès`);
     } catch (error) {
       console.error('Erreur upload:', error);
       alert('Erreur lors de l\'upload du fichier');
@@ -236,11 +257,51 @@ const ClientModal = ({ client, onClose }) => {
     }
   };
 
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files);
+      setUploadingFile(true);
+
+      try {
+        for (let file of files) {
+          const formData = new FormData();
+          formData.append('file', file);
+
+          await api.post(`/documents/upload/${client.id}`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+        }
+
+        fetchDocuments();
+        alert(`${files.length} document(s) ajouté(s) avec succès`);
+      } catch (error) {
+        console.error('Erreur upload:', error);
+        alert('Erreur lors de l\'upload des fichiers');
+      } finally {
+        setUploadingFile(false);
+      }
+    }
+  };
+
   const handleDeleteDocument = async (docId) => {
     if (!window.confirm('Supprimer ce document ?')) return;
 
     try {
-      await api.delete(\`/documents/\${docId}\`);
+      await api.delete(`/documents/${docId}`);
       fetchDocuments();
     } catch (error) {
       console.error('Erreur suppression:', error);
@@ -250,7 +311,7 @@ const ClientModal = ({ client, onClose }) => {
 
   const handleDownloadDocument = async (docId, fileName) => {
     try {
-      const response = await api.get(\`/documents/download/\${docId}\`, {
+      const response = await api.get(`/documents/download/${docId}`, {
         responseType: 'blob'
       });
 
@@ -272,7 +333,7 @@ const ClientModal = ({ client, onClose }) => {
     if (!newComment.trim()) return;
 
     try {
-      await api.post(\`/clients/\${client.id}/comments\`, { content: newComment });
+      await api.post(`/clients/${client.id}/comments`, { content: newComment });
       setNewComment('');
       fetchComments();
     } catch (error) {
@@ -281,11 +342,93 @@ const ClientModal = ({ client, onClose }) => {
     }
   };
 
+  const handleDeleteComment = async (commentId) => {
+    if (!window.confirm('Supprimer ce commentaire ?')) return;
+
+    try {
+      await api.delete(`/clients/${client.id}/comments/${commentId}`);
+      fetchComments();
+    } catch (error) {
+      console.error('Erreur suppression commentaire:', error);
+      alert('Erreur lors de la suppression du commentaire');
+    }
+  };
+
+  const handleAddAppointment = async (e) => {
+    e.preventDefault();
+    if (!newAppointment.title || !newAppointment.date || !newAppointment.time) {
+      alert('Veuillez remplir les champs obligatoires (Titre, Date, Heure)');
+      return;
+    }
+
+    try {
+      await api.post(`/clients/${client.id}/appointments`, newAppointment);
+      setNewAppointment({ title: '', date: '', time: '', location: '', notes: '' });
+      fetchAppointments();
+      alert('Rendez-vous ajouté avec succès');
+    } catch (error) {
+      console.error('Erreur ajout rendez-vous:', error);
+      alert('Erreur lors de l\'ajout du rendez-vous');
+    }
+  };
+
+  const handleDeleteAppointment = async (appointmentId) => {
+    if (!window.confirm('Supprimer ce rendez-vous ?')) return;
+
+    try {
+      await api.delete(`/clients/${client.id}/appointments/${appointmentId}`);
+      fetchAppointments();
+    } catch (error) {
+      console.error('Erreur suppression rendez-vous:', error);
+      alert('Erreur lors de la suppression');
+    }
+  };
+
+  const handlePreviewDocument = async (doc) => {
+    try {
+      // Check if file type is previewable (images or PDF)
+      const fileExtension = doc.file_name.split('.').pop().toLowerCase();
+      const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+      const isPdf = fileExtension === 'pdf';
+      const isImage = imageExtensions.includes(fileExtension);
+
+      if (!isImage && !isPdf) {
+        alert('Aperçu non disponible pour ce type de fichier.\nVeuillez le télécharger pour le consulter.');
+        return;
+      }
+
+      // Fetch document as blob
+      const response = await api.get(`/documents/download/${doc.id}`, {
+        responseType: 'blob'
+      });
+
+      // Create blob URL
+      const blob = new Blob([response.data], {
+        type: isPdf ? 'application/pdf' : response.data.type
+      });
+      const url = window.URL.createObjectURL(blob);
+
+      setPreviewDocument(doc);
+      setPreviewUrl(url);
+    } catch (error) {
+      console.error('Erreur aperçu:', error);
+      alert('Erreur lors de l\'aperçu du document');
+    }
+  };
+
+  const handleClosePreview = () => {
+    if (previewUrl) {
+      window.URL.revokeObjectURL(previewUrl);
+    }
+    setPreviewDocument(null);
+    setPreviewUrl(null);
+  };
+
   return (
-    <div className={styles.modalOverlay} onClick={() => onClose(false)}>
-      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
-          <h2>{isNew ? 'Nouveau Client' : \`Client - \${client.societe || 'Sans nom'}\`}</h2>
+    <div className={styles.overlay} onClick={() => onClose(false)}>
+      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.header}>
+          <h2 className={styles.title}>{isNew ? 'Nouveau Client' : `Client - ${client.societe || 'Sans nom'}`}</h2>
           <button className={styles.closeBtn} onClick={() => onClose(false)}>
             <X size={24} />
           </button>
@@ -293,7 +436,7 @@ const ClientModal = ({ client, onClose }) => {
 
         <div className={styles.tabs}>
           <button
-            className={\`\${styles.tab} \${activeTab === 'info' ? styles.activeTab : ''}\`}
+            className={`${styles.tab} ${activeTab === 'info' ? styles.active : ''}`}
             onClick={() => setActiveTab('info')}
           >
             Informations
@@ -301,22 +444,28 @@ const ClientModal = ({ client, onClose }) => {
           {!isNew && (
             <>
               <button
-                className={\`\${styles.tab} \${activeTab === 'documents' ? styles.activeTab : ''}\`}
+                className={`${styles.tab} ${activeTab === 'documents' ? styles.active : ''}`}
                 onClick={() => setActiveTab('documents')}
               >
                 Documents ({documents.length})
               </button>
               <button
-                className={\`\${styles.tab} \${activeTab === 'comments' ? styles.activeTab : ''}\`}
+                className={`${styles.tab} ${activeTab === 'comments' ? styles.active : ''}`}
                 onClick={() => setActiveTab('comments')}
               >
                 Commentaires ({comments.length})
+              </button>
+              <button
+                className={`${styles.tab} ${activeTab === 'appointments' ? styles.active : ''}`}
+                onClick={() => setActiveTab('appointments')}
+              >
+                Rendez-vous ({appointments.length})
               </button>
             </>
           )}
         </div>
 
-        <div className={styles.modalBody}>
+        <div className={styles.content}>
           {activeTab === 'info' && (
             <form onSubmit={handleSubmit}>
               {/* Section Bénéficiaire */}
@@ -480,12 +629,15 @@ const ClientModal = ({ client, onClose }) => {
                       name="type_produit"
                       value={formData.type_produit}
                       onChange={handleChange}
-                      className={styles.select}
+                      className={styles.styledSelect}
+                      style={{
+                        borderColor: PRODUITS.find(p => p.key === formData.type_produit)?.color || '#10b981'
+                      }}
                       required
                     >
-                      <option value="destratification">Destratification</option>
-                      <option value="pression">Pression</option>
-                      <option value="matelas_isolants">Matelas Isolants</option>
+                      {PRODUITS.map(p => (
+                        <option key={p.key} value={p.key}>{p.label}</option>
+                      ))}
                     </select>
                   </div>
                   <div className={styles.formGroup}>
@@ -494,7 +646,10 @@ const ClientModal = ({ client, onClose }) => {
                       name="statut"
                       value={formData.statut}
                       onChange={handleChange}
-                      className={styles.select}
+                      className={styles.styledSelect}
+                      style={{
+                        borderColor: STATUTS.find(s => s.key === formData.statut)?.color || '#10b981'
+                      }}
                     >
                       {STATUTS.map(s => (
                         <option key={s.key} value={s.key}>{s.label}</option>
@@ -587,36 +742,66 @@ const ClientModal = ({ client, onClose }) => {
 
           {activeTab === 'documents' && (
             <div className={styles.documentsTab}>
-              <div className={styles.uploadSection}>
-                <label className={styles.uploadBtn}>
-                  <Upload size={18} />
-                  {uploadingFile ? 'Upload...' : 'Ajouter un document'}
-                  <input type="file" onChange={handleFileUpload} style={{ display: 'none' }} disabled={uploadingFile} />
-                </label>
-                <p className={styles.hint}>PDF, Images, Documents Office (max 10MB)</p>
+              <div
+                className={`${styles.dropzone} ${dragActive ? styles.dropzoneActive : ''}`}
+                onDragEnter={handleDrag}
+                onDragOver={handleDrag}
+                onDragLeave={handleDrag}
+                onDrop={handleDrop}
+                onClick={() => document.getElementById('fileInput').click()}
+              >
+                <input
+                  id="fileInput"
+                  type="file"
+                  multiple
+                  onChange={handleFileUpload}
+                  style={{ display: 'none' }}
+                  disabled={uploadingFile}
+                />
+                <div className={styles.dropzoneContent}>
+                  <div className={styles.uploadIcon}>
+                    <Upload size={48} />
+                  </div>
+                  <div className={styles.dropzoneText}>
+                    {uploadingFile ? 'Upload en cours...' : 'Glissez vos fichiers ici ou cliquez pour parcourir'}
+                  </div>
+                  <div className={styles.dropzoneHint}>
+                    PDF, Images, Documents Office (max 10MB par fichier)
+                  </div>
+                </div>
               </div>
 
               <div className={styles.documentsList}>
                 {documents.map(doc => (
-                  <div key={doc.id} className={styles.documentItem}>
+                  <div key={doc.id} className={styles.documentCard}>
+                    <div className={styles.fileIcon}>
+                      <FileText size={24} />
+                    </div>
                     <div className={styles.documentInfo}>
-                      <strong>{doc.file_name}</strong>
-                      <span className={styles.documentMeta}>
-                        {(doc.file_size / 1024).toFixed(0)} KB - {new Date(doc.uploaded_at).toLocaleDateString('fr-FR')}
-                      </span>
+                      <div className={styles.documentName}>{doc.file_name}</div>
+                      <div className={styles.documentMeta}>
+                        {(doc.file_size / 1024).toFixed(0)} KB • {new Date(doc.uploaded_at).toLocaleDateString('fr-FR')}
+                      </div>
                     </div>
                     <div className={styles.documentActions}>
-                      <button onClick={() => handleDownloadDocument(doc.id, doc.file_name)} className={styles.iconBtn}>
+                      <button onClick={() => handlePreviewDocument(doc)} className={styles.iconBtn} title="Aperçu">
+                        <Eye size={18} />
+                      </button>
+                      <button onClick={() => handleDownloadDocument(doc.id, doc.file_name)} className={styles.iconBtn} title="Télécharger">
                         <Download size={18} />
                       </button>
-                      <button onClick={() => handleDeleteDocument(doc.id)} className={styles.iconBtn}>
+                      <button onClick={() => handleDeleteDocument(doc.id)} className={styles.iconBtn} title="Supprimer">
                         <Trash2 size={18} />
                       </button>
                     </div>
                   </div>
                 ))}
                 {documents.length === 0 && (
-                  <div className={styles.emptyState}>Aucun document</div>
+                  <div className={styles.emptyState}>
+                    <FileText size={48} />
+                    <div className={styles.emptyStateText}>Aucun document</div>
+                    <div className={styles.hint}>Utilisez la zone ci-dessus pour ajouter des documents</div>
+                  </div>
                 )}
               </div>
             </div>
@@ -642,10 +827,19 @@ const ClientModal = ({ client, onClose }) => {
                 {comments.map(comment => (
                   <div key={comment.id} className={styles.commentItem}>
                     <div className={styles.commentHeader}>
-                      <strong>{comment.username}</strong>
-                      <span className={styles.commentDate}>
-                        {new Date(comment.created_at).toLocaleString('fr-FR')}
-                      </span>
+                      <div>
+                        <strong>{comment.username}</strong>
+                        <span className={styles.commentDate}>
+                          {' '} · {new Date(comment.created_at).toLocaleString('fr-FR')}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteComment(comment.id)}
+                        className={styles.iconBtn}
+                        title="Supprimer"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
                     <div className={styles.commentContent}>{comment.content}</div>
                   </div>
@@ -656,8 +850,146 @@ const ClientModal = ({ client, onClose }) => {
               </div>
             </div>
           )}
+
+          {/* Onglet Rendez-vous */}
+          {activeTab === 'appointments' && (
+            <div className={styles.appointmentsTab}>
+              <form onSubmit={handleAddAppointment} className={styles.appointmentForm}>
+                <h4 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: 600 }}>Nouveau Rendez-vous</h4>
+                <div className={styles.formGrid}>
+                  <div className={styles.formGroup}>
+                    <label>Titre *</label>
+                    <input
+                      type="text"
+                      value={newAppointment.title}
+                      onChange={(e) => setNewAppointment({ ...newAppointment, title: e.target.value })}
+                      className={styles.input}
+                      placeholder="Ex: Visite technique"
+                      required
+                    />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label>Lieu</label>
+                    <input
+                      type="text"
+                      value={newAppointment.location}
+                      onChange={(e) => setNewAppointment({ ...newAppointment, location: e.target.value })}
+                      className={styles.input}
+                      placeholder="Adresse du rendez-vous"
+                    />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label>Date *</label>
+                    <input
+                      type="date"
+                      value={newAppointment.date}
+                      onChange={(e) => setNewAppointment({ ...newAppointment, date: e.target.value })}
+                      className={styles.input}
+                      required
+                    />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label>Heure *</label>
+                    <input
+                      type="time"
+                      value={newAppointment.time}
+                      onChange={(e) => setNewAppointment({ ...newAppointment, time: e.target.value })}
+                      className={styles.input}
+                      required
+                    />
+                  </div>
+                </div>
+                <div className={styles.formGroup} style={{ marginTop: '16px' }}>
+                  <label>Notes / Description</label>
+                  <textarea
+                    value={newAppointment.notes}
+                    onChange={(e) => setNewAppointment({ ...newAppointment, notes: e.target.value })}
+                    className={styles.textarea}
+                    rows={3}
+                    placeholder="Détails du rendez-vous..."
+                  />
+                </div>
+                <button type="submit" className={styles.saveBtn} style={{ marginTop: '16px' }}>
+                  <Calendar size={18} />
+                  Ajouter le rendez-vous
+                </button>
+              </form>
+
+              <div className={styles.appointmentsList}>
+                <h4 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: 600 }}>Rendez-vous prévus</h4>
+                {appointments.map(apt => (
+                  <div key={apt.id} className={styles.appointmentItem}>
+                    <div className={styles.appointmentIcon}>
+                      <Calendar size={20} />
+                    </div>
+                    <div className={styles.appointmentDetails}>
+                      <div className={styles.appointmentTitle}>{apt.title}</div>
+                      <div className={styles.appointmentDateTime}>
+                        {new Date(apt.date).toLocaleDateString('fr-FR', {
+                          day: '2-digit',
+                          month: 'long',
+                          year: 'numeric'
+                        })} à {apt.time}
+                      </div>
+                      {apt.location && (
+                        <div className={styles.appointmentLocation}>📍 {apt.location}</div>
+                      )}
+                      {apt.notes && (
+                        <div className={styles.appointmentNotes}>{apt.notes}</div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleDeleteAppointment(apt.id)}
+                      className={styles.iconBtn}
+                      style={{ alignSelf: 'flex-start' }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+                {appointments.length === 0 && (
+                  <div className={styles.emptyState}>
+                    <Calendar size={48} />
+                    <div className={styles.emptyStateText}>Aucun rendez-vous prévu</div>
+                    <div className={styles.hint}>Utilisez le formulaire ci-dessus pour ajouter un rendez-vous</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Modal de prévisualisation des documents */}
+      {previewDocument && previewUrl && (
+        <div className={styles.previewOverlay} onClick={handleClosePreview}>
+          <div className={styles.previewModal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.previewHeader}>
+              <h3>{previewDocument.file_name}</h3>
+              <button onClick={handleClosePreview} className={styles.closeBtn}>
+                <X size={24} />
+              </button>
+            </div>
+            <div className={styles.previewContent}>
+              {previewDocument.file_name.toLowerCase().endsWith('.pdf') ? (
+                <embed
+                  src={previewUrl}
+                  type="application/pdf"
+                  width="100%"
+                  height="100%"
+                  className={styles.previewEmbed}
+                />
+              ) : (
+                <img
+                  src={previewUrl}
+                  alt={previewDocument.file_name}
+                  className={styles.previewImage}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

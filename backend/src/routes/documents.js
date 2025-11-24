@@ -153,28 +153,39 @@ router.get('/download/:documentId', authenticateToken, (req, res) => {
 router.delete('/:documentId', authenticateToken, (req, res) => {
   try {
     const { documentId } = req.params;
+    console.log(`DELETE /documents/${documentId} - User: ${req.user?.username} (${req.user?.role})`);
 
-    const document = db.prepare('SELECT * FROM client_documents WHERE id = ?').get(documentId);
+    const document = db.prepare('SELECT * FROM client_documents WHERE id = ?').get(parseInt(documentId));
     if (!document) {
+      console.log(`Document ${documentId} not found`);
       return res.status(404).json({ error: 'Document introuvable' });
     }
 
+    console.log(`Document found: uploaded_by=${document.uploaded_by}, current_user=${req.user.id}`);
+
     // Seul l'uploadeur ou un admin peut supprimer
     if (document.uploaded_by !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Non autorisé' });
+      console.log(`Permission denied: user ${req.user.id} cannot delete document uploaded by ${document.uploaded_by}`);
+      return res.status(403).json({ error: 'Non autorisé - vous devez être l\'uploadeur ou admin' });
     }
 
     // Supprimer le fichier physique
     const filePath = path.join(__dirname, '../../uploads', document.file_path);
+    console.log(`Deleting file: ${filePath}`);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
+      console.log('File deleted successfully');
+    } else {
+      console.log('File not found on disk (already deleted?)');
     }
 
     // Supprimer l'entrée de la base de données
-    db.prepare('DELETE FROM client_documents WHERE id = ?').run(documentId);
+    db.prepare('DELETE FROM client_documents WHERE id = ?').run(parseInt(documentId));
+    console.log(`Document ${documentId} deleted from database`);
 
     res.json({ message: 'Document supprimé' });
   } catch (error) {
+    console.error(`Error deleting document:`, error);
     res.status(500).json({ error: error.message });
   }
 });

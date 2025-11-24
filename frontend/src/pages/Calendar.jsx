@@ -92,11 +92,16 @@ const Calendar = () => {
     const event = info.event;
     const props = event.extendedProps;
 
-    const message = `Rendez-vous:\n\nDate: ${event.start.toLocaleDateString('fr-FR')}\nHeure: ${props.time}\nContact: ${props.leadName}\nAgent: ${props.agent}`;
+    // Afficher uniquement les détails du rendez-vous
+    const message = `📅 Détails du rendez-vous\n\n` +
+      `📆 Date: ${event.start.toLocaleDateString('fr-FR')}\n` +
+      `🕐 Heure: ${props.time}\n` +
+      `👤 Contact: ${props.leadName}\n` +
+      `👨‍💼 Agent: ${props.agent}\n\n` +
+      `💡 Pour déplacer ce rendez-vous:\n` +
+      `→ Glissez-déposez le directement dans le calendrier`;
 
-    if (confirm(`${message}\n\nVoulez-vous supprimer ce rendez-vous ?`)) {
-      handleDeleteAppointment(event.id);
-    }
+    alert(message);
   };
 
   const handleDeleteAppointment = async (id) => {

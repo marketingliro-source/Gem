@@ -7,7 +7,7 @@ const router = express.Router();
 // Récupérer les clients (filtrage selon le rôle)
 router.get('/', authenticateToken, (req, res) => {
   try {
-    const { page = 1, limit = 20, search, statut, type_produit, code_naf } = req.query;
+    const { page = 1, limit = 20, search, statut, type_produit, code_naf, code_postal } = req.query;
     const offset = (page - 1) * limit;
 
     let query = 'SELECT clients.*, users.username as assigned_username FROM clients LEFT JOIN users ON clients.assigned_to = users.id';
@@ -37,6 +37,12 @@ router.get('/', authenticateToken, (req, res) => {
     if (code_naf) {
       conditions.push('code_naf LIKE ?');
       params.push(`%${code_naf}%`);
+    }
+
+    // Filtrer par code postal
+    if (code_postal) {
+      conditions.push('code_postal LIKE ?');
+      params.push(`%${code_postal}%`);
     }
 
     // Recherche par société, téléphone, adresse, nom signataire, SIRET
@@ -243,16 +249,24 @@ router.delete('/:id', authenticateToken, (req, res) => {
 router.get('/:id/comments', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
+
+    // Validate client exists
+    const clientExists = db.prepare('SELECT id FROM clients WHERE id = ?').get(parseInt(id));
+    if (!clientExists) {
+      return res.status(404).json({ error: 'Client non trouvé' });
+    }
+
     const comments = db.prepare(`
       SELECT client_comments.*, users.username
       FROM client_comments
       LEFT JOIN users ON client_comments.user_id = users.id
       WHERE client_id = ?
       ORDER BY created_at DESC
-    `).all(id);
+    `).all(parseInt(id));
 
     res.json(comments);
   } catch (error) {
+    console.error('Erreur GET comments:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -262,21 +276,27 @@ router.post('/:id/comments', authenticateToken, (req, res) => {
     const { id } = req.params;
     const { content } = req.body;
 
-    if (!content) {
+    if (!content || !content.trim()) {
       return res.status(400).json({ error: 'Le contenu est requis' });
+    }
+
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ error: 'Utilisateur non authentifié' });
     }
 
     const result = db.prepare(
       'INSERT INTO client_comments (client_id, user_id, content) VALUES (?, ?, ?)'
-    ).run(id, req.user.id, content);
+    ).run(parseInt(id), req.user.id, content.trim());
 
     res.status(201).json({
       id: result.lastInsertRowid,
-      client_id: id,
+      client_id: parseInt(id),
       user_id: req.user.id,
-      content
+      content: content.trim(),
+      created_at: new Date().toISOString()
     });
   } catch (error) {
+    console.error('Erreur POST comment:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -284,9 +304,17 @@ router.post('/:id/comments', authenticateToken, (req, res) => {
 router.delete('/:id/comments/:commentId', authenticateToken, (req, res) => {
   try {
     const { commentId } = req.params;
-    db.prepare('DELETE FROM client_comments WHERE id = ?').run(commentId);
+
+    // Verify comment exists before deleting
+    const comment = db.prepare('SELECT id FROM client_comments WHERE id = ?').get(parseInt(commentId));
+    if (!comment) {
+      return res.status(404).json({ error: 'Commentaire non trouvé' });
+    }
+
+    db.prepare('DELETE FROM client_comments WHERE id = ?').run(parseInt(commentId));
     res.json({ message: 'Commentaire supprimé' });
   } catch (error) {
+    console.error('Erreur DELETE comment:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -345,6 +373,73 @@ router.delete('/:id/appointments/:appointmentId', authenticateToken, (req, res) 
   }
 });
 
+// Import CSV
+router.post('/import/csv', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const multer = require('multer');
+    const csv = require('csv-parser');
+    const fs = require('fs');
+    const upload = multer({ dest: 'uploads/' });
+
+    upload.single('file')(req, res, async (err) => {
+      if (err) {
+        return res.status(400).json({ error: 'Erreur lors de l\'upload' });
+      }
+
+      const results = [];
+      const filePath = req.file.path;
+
+      fs.createReadStream(filePath)
+        .pipe(csv())
+        .on('data', (data) => results.push(data))
+        .on('end', async () => {
+          let imported = 0;
+
+          for (const row of results) {
+            try {
+              const stmt = db.prepare(`
+                INSERT INTO clients (societe, adresse, code_postal, telephone, siret, nom_site, adresse_travaux, code_postal_travaux,
+                                     nom_signataire, fonction, telephone_signataire, mail_signataire, type_produit, code_naf, statut, assigned_to)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `);
+
+              stmt.run(
+                row.societe || null,
+                row.adresse || null,
+                row.code_postal || null,
+                row.telephone || null,
+                row.siret || null,
+                row.nom_site || null,
+                row.adresse_travaux || null,
+                row.code_postal_travaux || null,
+                row.nom_signataire || null,
+                row.fonction || null,
+                row.telephone_signataire || null,
+                row.mail_signataire || null,
+                row.type_produit || 'destratification',
+                row.code_naf || null,
+                row.statut || 'nouveau',
+                req.user.id
+              );
+
+              imported++;
+            } catch (error) {
+              console.error('Erreur import ligne:', error.message);
+            }
+          }
+
+          // Supprimer le fichier temporaire
+          fs.unlinkSync(filePath);
+
+          res.json({ message: 'Import réussi', imported });
+        });
+    });
+  } catch (error) {
+    console.error('Erreur import CSV:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Exporter les clients en Excel
 router.get('/export/excel', authenticateToken, async (req, res) => {
   try {
@@ -354,8 +449,8 @@ router.get('/export/excel', authenticateToken, async (req, res) => {
     let params = [];
     let conditions = [];
 
-    // Si agent, voir seulement ses clients
-    if (req.user.role === 'agent') {
+    // Si télépro, voir seulement ses clients
+    if (req.user.role === 'telepro') {
       conditions.push('assigned_to = ?');
       params.push(req.user.id);
     }
@@ -371,26 +466,26 @@ router.get('/export/excel', authenticateToken, async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Clients');
 
-    // Définir les colonnes avec formatage
+    // Définir les colonnes avec formatage - NOUVELLE STRUCTURE
     worksheet.columns = [
       { header: 'ID', key: 'id', width: 8 },
-      { header: 'Prénom', key: 'first_name', width: 15 },
-      { header: 'Nom', key: 'last_name', width: 15 },
-      { header: 'Email', key: 'email', width: 25 },
-      { header: 'Téléphone', key: 'phone', width: 15 },
-      { header: 'Téléphone fixe', key: 'landline_phone', width: 15 },
-      { header: 'Mobile', key: 'mobile_phone', width: 15 },
-      { header: 'Adresse', key: 'address', width: 30 },
-      { header: 'Ville', key: 'city', width: 20 },
-      { header: 'Code postal', key: 'postal_code', width: 12 },
-      { header: 'Courrier envoyé', key: 'mail_sent', width: 15 },
-      { header: 'Date courrier', key: 'mail_sent_date', width: 18 },
-      { header: 'Document reçu', key: 'document_received', width: 15 },
-      { header: 'Date document', key: 'document_received_date', width: 18 },
-      { header: 'Annulé', key: 'cancelled', width: 10 },
-      { header: 'Date annulation', key: 'cancelled_date', width: 18 },
+      { header: 'Société', key: 'societe', width: 25 },
+      { header: 'Adresse', key: 'adresse', width: 30 },
+      { header: 'Code Postal', key: 'code_postal', width: 12 },
+      { header: 'Téléphone', key: 'telephone', width: 15 },
+      { header: 'SIRET', key: 'siret', width: 18 },
+      { header: 'Nom Site', key: 'nom_site', width: 25 },
+      { header: 'Adresse Travaux', key: 'adresse_travaux', width: 30 },
+      { header: 'CP Travaux', key: 'code_postal_travaux', width: 12 },
+      { header: 'Signataire', key: 'nom_signataire', width: 20 },
+      { header: 'Fonction', key: 'fonction', width: 15 },
+      { header: 'Tél Signataire', key: 'telephone_signataire', width: 15 },
+      { header: 'Email Signataire', key: 'mail_signataire', width: 25 },
+      { header: 'Produit', key: 'type_produit', width: 18 },
+      { header: 'Code NAF', key: 'code_naf', width: 12 },
+      { header: 'Statut', key: 'statut', width: 18 },
       { header: 'Assigné à', key: 'assigned_username', width: 20 },
-      { header: 'Date de création', key: 'created_at', width: 20 }
+      { header: 'Date création', key: 'created_at', width: 20 }
     ];
 
     // Styler la ligne d'en-tête
@@ -407,12 +502,6 @@ router.get('/export/excel', authenticateToken, async (req, res) => {
     clients.forEach((client, index) => {
       const row = worksheet.addRow({
         ...client,
-        mail_sent: client.mail_sent ? 'Oui' : 'Non',
-        document_received: client.document_received ? 'Oui' : 'Non',
-        cancelled: client.cancelled ? 'Oui' : 'Non',
-        mail_sent_date: client.mail_sent_date ? new Date(client.mail_sent_date).toLocaleString('fr-FR') : '',
-        document_received_date: client.document_received_date ? new Date(client.document_received_date).toLocaleString('fr-FR') : '',
-        cancelled_date: client.cancelled_date ? new Date(client.cancelled_date).toLocaleString('fr-FR') : '',
         created_at: client.created_at ? new Date(client.created_at).toLocaleString('fr-FR') : '',
         assigned_username: client.assigned_username || 'Non assigné'
       });
@@ -424,37 +513,6 @@ router.get('/export/excel', authenticateToken, async (req, res) => {
           pattern: 'solid',
           fgColor: { argb: 'FFF0F0F0' }
         };
-      }
-
-      // Colorier les colonnes de tracking
-      if (client.mail_sent) {
-        row.getCell('mail_sent').fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FF10B981' }
-        };
-        row.getCell('mail_sent').font = { color: { argb: 'FFFFFFFF' }, bold: true };
-        row.getCell('mail_sent').alignment = { horizontal: 'center', vertical: 'middle' };
-      }
-
-      if (client.document_received) {
-        row.getCell('document_received').fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FF3B82F6' }
-        };
-        row.getCell('document_received').font = { color: { argb: 'FFFFFFFF' }, bold: true };
-        row.getCell('document_received').alignment = { horizontal: 'center', vertical: 'middle' };
-      }
-
-      if (client.cancelled) {
-        row.getCell('cancelled').fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFEF4444' }
-        };
-        row.getCell('cancelled').font = { color: { argb: 'FFFFFFFF' }, bold: true };
-        row.getCell('cancelled').alignment = { horizontal: 'center', vertical: 'middle' };
       }
 
       // Bordures pour toutes les cellules

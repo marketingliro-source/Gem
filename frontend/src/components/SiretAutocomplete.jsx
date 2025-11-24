@@ -122,11 +122,17 @@ const SiretAutocomplete = ({ value, onChange, onEnrich, typeProduit, disabled })
         onEnrich(enrichedData);
       }
 
+      // Afficher message si enrichissement partiel
+      if (enrichedData.enrichmentStatus === 'partial' && enrichedData.message) {
+        alert(`ℹ️ ${enrichedData.message}\n\n${enrichedData.enrichmentWarning || ''}`);
+      }
+
       console.log('✅ Données enrichies:', enrichedData);
 
     } catch (error) {
       console.error('Erreur enrichissement:', error);
-      alert('Impossible d\'enrichir les données pour ce SIRET');
+      const errorMsg = error.response?.data?.message || error.message || 'Erreur inconnue';
+      alert(`⚠️ Enrichissement impossible\n\n${errorMsg}\n\nVeuillez remplir manuellement les informations.`);
     } finally {
       setEnriching(false);
     }

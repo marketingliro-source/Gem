@@ -25,8 +25,8 @@ const Layout = ({ children }) => {
 
   const clientsItems = [
     { path: '/clients/destratification', icon: Fan, label: 'Destratification', color: '#10b981', produit: 'destratification' },
-    { path: '/clients/pression', icon: Wind, label: 'Pression', color: '#3b82f6', produit: 'pression' },
-    { path: '/clients/matelas', icon: Layers, label: 'Matelas Isolants', color: '#f59e0b', produit: 'matelas_isolants' },
+    { path: '/clients/pression', icon: Wind, label: 'Pression', color: '#8b5cf6', produit: 'pression' },
+    { path: '/clients/matelas_isolants', icon: Layers, label: 'Matelas Isolants', color: '#f59e0b', produit: 'matelas_isolants' },
   ];
 
   const filteredNavItems = navItems.filter(item => item.roles.includes(user?.role));

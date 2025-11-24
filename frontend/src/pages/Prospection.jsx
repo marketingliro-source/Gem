@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../utils/api';
-import { Search, Download, FileSpreadsheet, Filter, MapPin, Building2, Zap, Loader } from 'lucide-react';
+import { Search, Download, FileSpreadsheet, Filter, MapPin, Building2, Zap, Loader, X } from 'lucide-react';
 import styles from './Prospection.module.css';
 
 const Prospection = () => {
@@ -8,15 +8,21 @@ const Prospection = () => {
   const [exporting, setExporting] = useState(false);
   const [results, setResults] = useState([]);
   const [totalResults, setTotalResults] = useState(0);
+  const [nafSuggestions, setNafSuggestions] = useState([]);
 
   const [filters, setFilters] = useState({
-    codeNAF: '',
+    codesNAF: [], // Support multi-NAF
     departement: '',
     region: '',
     codePostal: '',
     typeProduit: '',
     enrichPhone: false,
-    limit: 100
+    limit: 100,
+    // Critères techniques
+    hauteurMin: '',
+    surfaceMin: '',
+    typesChauffage: [],
+    classesDPE: []
   });
 
   const PRODUITS = [
@@ -26,31 +32,129 @@ const Prospection = () => {
     { value: 'matelas_isolants', label: 'Matelas Isolants' }
   ];
 
+  // Codes régions INSEE officiels (depuis 2016)
   const REGIONS = [
     { value: '', label: 'Toutes les régions' },
     { value: '11', label: 'Île-de-France' },
-    { value: '84', label: 'Auvergne-Rhône-Alpes' },
-    { value: '93', label: 'Provence-Alpes-Côte d\'Azur' },
-    { value: '75', label: 'Nouvelle-Aquitaine' },
-    { value: '76', label: 'Occitanie' },
-    { value: '44', label: 'Grand Est' },
-    { value: '32', label: 'Hauts-de-France' },
-    { value: '28', label: 'Normandie' },
     { value: '24', label: 'Centre-Val de Loire' },
+    { value: '27', label: 'Bourgogne-Franche-Comté' },
+    { value: '28', label: 'Normandie' },
+    { value: '32', label: 'Hauts-de-France' },
+    { value: '44', label: 'Grand Est' },
     { value: '52', label: 'Pays de la Loire' },
     { value: '53', label: 'Bretagne' },
-    { value: '27', label: 'Bourgogne-Franche-Comté' }
+    { value: '75', label: 'Nouvelle-Aquitaine' },
+    { value: '76', label: 'Occitanie' },
+    { value: '84', label: 'Auvergne-Rhône-Alpes' },
+    { value: '93', label: 'Provence-Alpes-Côte d\'Azur' },
+    { value: '94', label: 'Corse' }
   ];
 
-  // Codes NAF pertinents pour le BTP/CEE
-  const NAF_SUGGESTIONS = [
-    { code: '4120B', label: 'Construction d\'autres bâtiments' },
-    { code: '4322B', label: 'Installation équipements thermiques' },
-    { code: '4329A', label: 'Travaux d\'isolation' },
-    { code: '4321A', label: 'Installation électrique' },
-    { code: '4322A', label: 'Installation eau/gaz' },
-    { code: '4120A', label: 'Construction de maisons individuelles' }
+  const TYPES_CHAUFFAGE = [
+    { value: 'collectif', label: 'Collectif' },
+    { value: 'individuel', label: 'Individuel' },
+    { value: 'air', label: 'Air' },
+    { value: 'gaz', label: 'Gaz' },
+    { value: 'fioul', label: 'Fioul' },
+    { value: 'electrique', label: 'Électrique' },
+    { value: 'bois', label: 'Bois' },
+    { value: 'reseau_chaleur', label: 'Réseau de chaleur' }
   ];
+
+  const CLASSES_DPE = [
+    { value: 'A', label: 'A (Excellent)', color: '#00a650' },
+    { value: 'B', label: 'B (Très bon)', color: '#50b948' },
+    { value: 'C', label: 'C (Bon)', color: '#c7d301' },
+    { value: 'D', label: 'D (Moyen)', color: '#f5e625' },
+    { value: 'E', label: 'E (Passable)', color: '#fcaf17' },
+    { value: 'F', label: 'F (Médiocre)', color: '#ee3124' },
+    { value: 'G', label: 'G (Mauvais)', color: '#d71e20' }
+  ];
+
+  // Charger les NAF suggestions depuis le backend selon le produit
+  useEffect(() => {
+    const loadNafSuggestions = async () => {
+      if (filters.typeProduit) {
+        try {
+          const response = await api.get(`/prospection/naf/relevant?typeProduit=${filters.typeProduit}`);
+          setNafSuggestions(response.data || []);
+        } catch (error) {
+          console.error('Erreur chargement NAF:', error);
+          // Fallback vers suggestions par défaut
+          setNafSuggestions(DEFAULT_NAF_SUGGESTIONS);
+        }
+      } else {
+        setNafSuggestions(DEFAULT_NAF_SUGGESTIONS);
+      }
+    };
+
+    loadNafSuggestions();
+  }, [filters.typeProduit]);
+
+  // Suggestions NAF par défaut (BTP générique)
+  const DEFAULT_NAF_SUGGESTIONS = [
+    { code: '4120B', label: 'Construction d\'autres bâtiments', pertinence: 'moyenne' },
+    { code: '4322B', label: 'Installation équipements thermiques', pertinence: 'haute' },
+    { code: '4329A', label: 'Travaux d\'isolation', pertinence: 'haute' },
+    { code: '4321A', label: 'Installation électrique', pertinence: 'moyenne' },
+    { code: '4322A', label: 'Installation eau/gaz', pertinence: 'haute' },
+    { code: '4120A', label: 'Construction de maisons individuelles', pertinence: 'moyenne' }
+  ];
+
+  // Ajouter/retirer un code NAF
+  const toggleNafCode = (code) => {
+    if (filters.codesNAF.includes(code)) {
+      // Retirer
+      setFilters({
+        ...filters,
+        codesNAF: filters.codesNAF.filter(c => c !== code)
+      });
+    } else {
+      // Ajouter
+      setFilters({
+        ...filters,
+        codesNAF: [...filters.codesNAF, code]
+      });
+    }
+  };
+
+  // Retirer un code NAF (depuis le chip)
+  const removeNafCode = (code) => {
+    setFilters({
+      ...filters,
+      codesNAF: filters.codesNAF.filter(c => c !== code)
+    });
+  };
+
+  // Toggle type chauffage
+  const toggleTypeChauffage = (type) => {
+    if (filters.typesChauffage.includes(type)) {
+      setFilters({
+        ...filters,
+        typesChauffage: filters.typesChauffage.filter(t => t !== type)
+      });
+    } else {
+      setFilters({
+        ...filters,
+        typesChauffage: [...filters.typesChauffage, type]
+      });
+    }
+  };
+
+  // Toggle classe DPE
+  const toggleClasseDPE = (classe) => {
+    if (filters.classesDPE.includes(classe)) {
+      setFilters({
+        ...filters,
+        classesDPE: filters.classesDPE.filter(c => c !== classe)
+      });
+    } else {
+      setFilters({
+        ...filters,
+        classesDPE: [...filters.classesDPE, classe]
+      });
+    }
+  };
 
   const handleFilterChange = (name, value) => {
     setFilters({ ...filters, [name]: value });
@@ -58,14 +162,26 @@ const Prospection = () => {
 
   const handleSearch = async () => {
     // Validation
-    if (!filters.codeNAF && !filters.departement && !filters.region && !filters.codePostal) {
+    if (filters.codesNAF.length === 0 && !filters.departement && !filters.region && !filters.codePostal) {
       alert('Veuillez sélectionner au moins un critère de recherche (NAF ou géographique)');
+      return;
+    }
+
+    if (!filters.typeProduit) {
+      alert('Veuillez sélectionner un type de produit CEE');
       return;
     }
 
     setLoading(true);
     try {
-      const response = await api.post('/prospection/search', filters);
+      // Préparer le payload avec codesNAF au lieu de codeNAF
+      const searchPayload = {
+        ...filters,
+        // Si un seul NAF, envoyer aussi codeNAF pour compatibilité
+        codeNAF: filters.codesNAF.length === 1 ? filters.codesNAF[0] : undefined
+      };
+
+      const response = await api.post('/prospection/search', searchPayload);
 
       setResults(response.data.results || []);
       setTotalResults(response.data.total || 0);
@@ -171,21 +287,62 @@ const Prospection = () => {
         </div>
 
         <div className={styles.filtersGrid}>
-          {/* Code NAF */}
-          <div className={styles.filterGroup}>
-            <label>Code NAF/APE</label>
-            <select
-              value={filters.codeNAF}
-              onChange={(e) => handleFilterChange('codeNAF', e.target.value)}
-              className={styles.select}
-            >
-              <option value="">Sélectionner un code NAF</option>
-              {NAF_SUGGESTIONS.map(naf => (
-                <option key={naf.code} value={naf.code}>
-                  {naf.code} - {naf.label}
-                </option>
-              ))}
-            </select>
+          {/* Codes NAF (Multi-select) */}
+          <div className={styles.filterGroup} style={{ gridColumn: '1 / -1' }}>
+            <label>Codes NAF/APE (sélection multiple)</label>
+
+            {/* Chips des codes NAF sélectionnés */}
+            {filters.codesNAF.length > 0 && (
+              <div className={styles.nafChips}>
+                {filters.codesNAF.map(code => {
+                  const nafData = nafSuggestions.find(n => n.code === code) ||
+                                  DEFAULT_NAF_SUGGESTIONS.find(n => n.code === code);
+                  return (
+                    <span key={code} className={styles.nafChip}>
+                      {code} - {nafData?.label || ''}
+                      <button
+                        type="button"
+                        onClick={() => removeNafCode(code)}
+                        className={styles.chipRemove}
+                        aria-label="Retirer"
+                      >
+                        <X size={14} />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Liste de sélection des codes NAF */}
+            <div className={styles.nafSelector}>
+              <select
+                onChange={(e) => {
+                  if (e.target.value) {
+                    toggleNafCode(e.target.value);
+                    e.target.value = ''; // Reset
+                  }
+                }}
+                className={styles.select}
+                value=""
+              >
+                <option value="">+ Ajouter un code NAF...</option>
+                {nafSuggestions.map(naf => (
+                  <option
+                    key={naf.code}
+                    value={naf.code}
+                    disabled={filters.codesNAF.includes(naf.code)}
+                  >
+                    {naf.code} - {naf.label}
+                    {naf.pertinence && ` (${naf.pertinence})`}
+                  </option>
+                ))}
+              </select>
+              <p className={styles.nafHelp}>
+                💡 Sélectionnez un ou plusieurs codes NAF.
+                {filters.typeProduit && ' Les suggestions sont adaptées au produit choisi.'}
+              </p>
+            </div>
           </div>
 
           {/* Région */}
@@ -261,6 +418,107 @@ const Prospection = () => {
             </select>
           </div>
         </div>
+
+        {/* Critères techniques */}
+        {filters.typeProduit && (
+          <div className={styles.technicalFilters}>
+            <h3 className={styles.sectionTitle}>
+              <Zap size={18} />
+              Critères techniques (optionnel)
+            </h3>
+
+            <div className={styles.filtersGrid}>
+              {/* Hauteur minimale (Destratification) */}
+              {(filters.typeProduit === 'destratification' || filters.typeProduit === '') && (
+                <div className={styles.filterGroup}>
+                  <label>Hauteur minimale (m)</label>
+                  <input
+                    type="number"
+                    value={filters.hauteurMin}
+                    onChange={(e) => handleFilterChange('hauteurMin', e.target.value)}
+                    placeholder="Ex: 6"
+                    className={styles.input}
+                    min="0"
+                    max="50"
+                    step="0.5"
+                  />
+                  <span className={styles.hint}>Pour destratification (≥4m recommandé)</span>
+                </div>
+              )}
+
+              {/* Surface minimale (Tous produits) */}
+              <div className={styles.filterGroup}>
+                <label>Surface minimale (m²)</label>
+                <input
+                  type="number"
+                  value={filters.surfaceMin}
+                  onChange={(e) => handleFilterChange('surfaceMin', e.target.value)}
+                  placeholder="Ex: 500"
+                  className={styles.input}
+                  min="0"
+                  max="50000"
+                  step="100"
+                />
+                <span className={styles.hint}>Surface plancher du bâtiment</span>
+              </div>
+
+              {/* Types de chauffage (Destratification + Pression) */}
+              {(filters.typeProduit === 'destratification' || filters.typeProduit === 'pression' || filters.typeProduit === '') && (
+                <div className={styles.filterGroup} style={{ gridColumn: '1 / -1' }}>
+                  <label>Types de chauffage</label>
+                  <div className={styles.checkboxGrid}>
+                    {TYPES_CHAUFFAGE.map(type => (
+                      <label key={type.value} className={styles.checkboxItem}>
+                        <input
+                          type="checkbox"
+                          checked={filters.typesChauffage.includes(type.value)}
+                          onChange={() => toggleTypeChauffage(type.value)}
+                        />
+                        <span>{type.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <span className={styles.hint}>Pour destratification (air) et pression (collectif)</span>
+                </div>
+              )}
+
+              {/* Classes DPE (Matelas isolants) */}
+              {(filters.typeProduit === 'matelas_isolants' || filters.typeProduit === '') && (
+                <div className={styles.filterGroup} style={{ gridColumn: '1 / -1' }}>
+                  <label>Classes DPE (mauvaise isolation)</label>
+                  <div className={styles.dpeGrid}>
+                    {CLASSES_DPE.map(classe => (
+                      <label
+                        key={classe.value}
+                        className={`${styles.dpeItem} ${filters.classesDPE.includes(classe.value) ? styles.dpeItemSelected : ''}`}
+                        style={{
+                          borderColor: filters.classesDPE.includes(classe.value) ? classe.color : '#d1d5db'
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={filters.classesDPE.includes(classe.value)}
+                          onChange={() => toggleClasseDPE(classe.value)}
+                          style={{ display: 'none' }}
+                        />
+                        <span
+                          className={styles.dpeLabel}
+                          style={{
+                            backgroundColor: classe.color,
+                            color: 'white'
+                          }}
+                        >
+                          {classe.value}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <span className={styles.hint}>Recommandé: E, F, G pour matelas isolants</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Options avancées */}
         <div className={styles.advancedOptions}>

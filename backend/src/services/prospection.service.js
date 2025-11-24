@@ -1,442 +1,714 @@
 const rechercheService = require('./external-api/recherche.service');
 const sireneService = require('./external-api/sirene.service');
+const banService = require('./external-api/ban.service');
+const rnbService = require('./external-api/rnb.service');
 const bdnbService = require('./external-api/bdnb.service');
-const pappersService = require('./external-api/pappers.service');
-const cacheService = require('./cache.service');
+const bdtopoService = require('./external-api/bdtopo.service');
+const georisquesService = require('./external-api/georisques.service');
+const dpeService = require('./external-api/dpe.service');
+const scoringService = require('./scoring.service');
 
 /**
- * Service de prospection avancée
- * Permet de rechercher des entreprises selon critères multiples
- * pour générer des fichiers de prospects qualifiés
+ * Service de prospection enrichie multi-sources
+ * Recherche et qualifie automatiquement les prospects par produit
+ * Croise 8 sources de données publiques gratuites
  */
 class ProspectionService {
   constructor() {
-    this.maxResults = parseInt(process.env.PROSPECTION_MAX_RESULTS) || 1000;
+    // Limite par défaut de résultats enrichis (coûteux en API calls)
+    this.defaultLimit = 20;
+    this.defaultEnrichLimit = 10; // Enrichir seulement top 10 par défaut
   }
 
   /**
-   * Recherche avancée d'entreprises pour prospection
+   * Recherche enrichie multi-sources avec scoring
    * @param {Object} criteria - Critères de recherche
+   * @param {string} criteria.codeNAF - Code NAF (ex: "47.11")
+   * @param {Array} criteria.codesNAF - Codes NAF multiples (ex: ["47.11", "52.10A"])
+   * @param {string} criteria.departement - Code département (ex: "75")
+   * @param {string} criteria.region - Nom région (ex: "Île-de-France")
+   * @param {string} criteria.codePostal - Code postal (ex: "75001")
+   * @param {string} criteria.commune - Nom commune
+   * @param {string} criteria.produit - destratification | pression | matelas_isolants
+   * @param {number} criteria.scoreMinimum - Score minimum (0-100, défaut: seuil produit)
+   * @param {number} criteria.limit - Nombre max résultats (défaut: 20)
+   * @param {boolean} criteria.enrichAll - Enrichir tous les résultats (défaut: false)
+   * @param {number} criteria.hauteurMin - Hauteur minimale du bâtiment (m)
+   * @param {number} criteria.surfaceMin - Surface minimale (m²)
+   * @param {Array} criteria.typesChauffage - Types de chauffage (ex: ["collectif", "air"])
+   * @param {Array} criteria.classesDPE - Classes DPE (ex: ["E", "F", "G"])
+   * @returns {Promise<Array>}
+   */
+  async searchEnriched(criteria) {
+    console.log('🔍 Prospection enrichie multi-sources:', criteria);
+
+    const {
+      codeNAF,
+      codesNAF,
+      departement,
+      region,
+      codePostal,
+      commune,
+      produit,
+      scoreMinimum = null,
+      limit = this.defaultLimit,
+      enrichAll = false,
+      // Critères techniques
+      hauteurMin,
+      surfaceMin,
+      typesChauffage,
+      classesDPE
+    } = criteria;
+
+    if (!produit) {
+      throw new Error('Produit requis (destratification, pression, matelas_isolants)');
+    }
+
+    // === ÉTAPE 1: RECHERCHE ENTREPRISES (API Recherche Entreprises) ===
+    console.log('📊📊📊 Étape 1/5: Recherche entreprises...');
+    console.log('📋 [PROSPECTION] Critères reçus:', { codeNAF, codesNAF, departement, region, codePostal, commune, produit, limit });
+
+    const searchParams = {};
+    // Gérer multi-NAF : utiliser le premier code pour la recherche (l'API n'accepte qu'un seul NAF)
+    const nafToUse = codesNAF && codesNAF.length > 0 ? codesNAF[0] : codeNAF;
+    if (nafToUse) searchParams.codeNAF = nafToUse;
+    if (departement) searchParams.departement = departement;
+    if (codePostal) searchParams.codePostal = codePostal;  // 🔧 FIX: utiliser "codePostal" pas "code_postal"
+    if (commune) searchParams.commune = commune;
+
+    if (codesNAF && codesNAF.length > 1) {
+      console.log(`⚠️  Multi-NAF détecté: ${codesNAF.length} codes. Recherche avec le premier (${nafToUse}), filtrage post-enrichissement pour les autres.`);
+    }
+
+    console.log('🔧 [PROSPECTION] Paramètres construits pour rechercheService.search():', searchParams);
+
+    let entreprises = [];
+
+    try {
+      // Rechercher avec l'API Recherche Entreprises (plus rapide)
+      console.log('🚀 [PROSPECTION] Appel rechercheService.search() avec query="*" (wildcard) et options:', {
+        ...searchParams,
+        limit: limit  // 🔧 FIX: utiliser "limit" pas "limite" ni "par_page"
+      });
+
+      const results = await rechercheService.search('*', {
+        ...searchParams,
+        limit: limit
+      });
+
+      console.log(`📦 [PROSPECTION] Résultats reçus de rechercheService.search(): ${results ? results.length : 'null'} entreprises`);
+
+      if (results && results.length > 0) {
+        console.log('👉 [PROSPECTION] Premier résultat:', JSON.stringify(results[0], null, 2));
+      }
+
+      entreprises = results.slice(0, limit);
+      console.log(`✅✅✅ ${entreprises.length} entreprises trouvées APRÈS slice`);
+
+    } catch (error) {
+      console.error('❌❌❌ Erreur recherche entreprises:', error.message);
+      console.error('❌ Stack:', error.stack);
+      return [];
+    }
+
+    if (entreprises.length === 0) {
+      console.warn('⚠️  Aucune entreprise trouvée pour ces critères');
+      return [];
+    }
+
+    // === ÉTAPE 2: ENRICHISSEMENT MULTI-SOURCES ===
+    console.log('🔄 Étape 2/5: Enrichissement multi-sources...');
+
+    const enrichLimit = enrichAll ? limit : Math.min(this.defaultEnrichLimit, limit);
+    const entreprisesAEnrichir = entreprises.slice(0, enrichLimit);
+
+    const enrichedProspects = [];
+
+    for (const [index, entreprise] of entreprisesAEnrichir.entries()) {
+      console.log(`\n📍 Enrichissement ${index + 1}/${enrichLimit}: ${entreprise.nom_complet || entreprise.denomination} (${entreprise.siret})`);
+
+      try {
+        const enrichedData = await this.enrichSingleProspect(entreprise, produit);
+
+        if (enrichedData) {
+          enrichedProspects.push(enrichedData);
+        }
+
+      } catch (error) {
+        console.warn(`⚠️  Erreur enrichissement ${entreprise.siret}:`, error.message);
+        // Continuer avec les autres
+      }
+
+      // Petite pause pour éviter rate limiting
+      if (index < enrichLimit - 1) {
+        await this.sleep(100);
+      }
+    }
+
+    console.log(`\n✅ ${enrichedProspects.length} prospects enrichis`);
+
+    // === ÉTAPE 3: SCORING PAR PRODUIT ===
+    console.log('🎯 Étape 3/5: Scoring par produit...');
+
+    const scoredProspects = enrichedProspects.map(prospect => {
+      const scores = scoringService.scoreAll(prospect);
+
+      return {
+        ...prospect,
+        scoring: scores,
+        scoreProduiCible: scores[produit]?.score || 0,
+        eligibleProduitCible: scores[produit]?.eligible || false,
+        raisonsProduitCible: scores[produit]?.raisons || [],
+        detailsProduitCible: scores[produit]?.details || {},
+        estimationCUMAC: scoringService.estimateCUMAC(prospect, produit)
+      };
+    });
+
+    console.log(`✅ ${scoredProspects.length} prospects scorés`);
+
+    // === ÉTAPE 4: FILTRAGE PAR SCORE MINIMUM ===
+    console.log('⚡ Étape 4/5: Filtrage par score...');
+
+    const seuilMinimum = scoreMinimum !== null
+      ? scoreMinimum
+      : scoringService.seuilsMinimaux[produit];
+
+    const prospectsQualifies = scoredProspects.filter(p =>
+      p.scoreProduiCible >= seuilMinimum
+    );
+
+    console.log(`✅ ${prospectsQualifies.length} prospects qualifiés (score >= ${seuilMinimum})`);
+
+    // === ÉTAPE 4.5: FILTRAGE PAR CRITÈRES TECHNIQUES ===
+    let prospectsFiltres = prospectsQualifies;
+
+    if (hauteurMin || surfaceMin || (typesChauffage && typesChauffage.length > 0) || (classesDPE && classesDPE.length > 0) || (codesNAF && codesNAF.length > 1)) {
+      console.log('🔧 Étape 4.5/5: Filtrage par critères techniques...');
+
+      prospectsFiltres = prospectsQualifies.filter(p => {
+        let match = true;
+
+        // Filtrage multi-NAF (si plus d'un code NAF spécifié)
+        if (codesNAF && codesNAF.length > 1) {
+          const prospectNAF = p.sirene?.codeNAF;
+          if (prospectNAF) {
+            // Vérifier si le code NAF du prospect commence par l'un des codes NAF recherchés
+            const nafMatch = codesNAF.some(code => prospectNAF.startsWith(code.replace('.', '')));
+            if (!nafMatch) match = false;
+          }
+        }
+
+        // Filtrage par hauteur minimale
+        if (match && hauteurMin) {
+          const hauteur = p.bdtopo?.hauteur || p.bdnb?.hauteur || p.rnb?.hauteur;
+          if (!hauteur || parseFloat(hauteur) < parseFloat(hauteurMin)) {
+            match = false;
+          }
+        }
+
+        // Filtrage par surface minimale
+        if (match && surfaceMin) {
+          const surface = p.bdnb?.surfacePlancher || p.rnb?.surface;
+          if (!surface || parseFloat(surface) < parseFloat(surfaceMin)) {
+            match = false;
+          }
+        }
+
+        // Filtrage par type de chauffage
+        if (match && typesChauffage && typesChauffage.length > 0) {
+          const typeChauffage = p.bdnb?.typeChauffage?.toLowerCase() || '';
+          const energieChauffage = p.bdnb?.energieChauffage?.toLowerCase() || '';
+
+          const chauffageMatch = typesChauffage.some(type => {
+            type = type.toLowerCase();
+            return typeChauffage.includes(type) || energieChauffage.includes(type);
+          });
+
+          if (!chauffageMatch) {
+            match = false;
+          }
+        }
+
+        // Filtrage par classe DPE
+        if (match && classesDPE && classesDPE.length > 0) {
+          const classeDPE = p.bdnb?.classeDPE || p.dpe?.[0]?.etiquetteDPE;
+          if (!classeDPE || !classesDPE.includes(classeDPE.toUpperCase())) {
+            match = false;
+          }
+        }
+
+        return match;
+      });
+
+      console.log(`✅ ${prospectsFiltres.length} prospects après filtrage technique`);
+      if (hauteurMin) console.log(`   - Hauteur >= ${hauteurMin}m`);
+      if (surfaceMin) console.log(`   - Surface >= ${surfaceMin}m²`);
+      if (typesChauffage && typesChauffage.length > 0) console.log(`   - Types chauffage: ${typesChauffage.join(', ')}`);
+      if (classesDPE && classesDPE.length > 0) console.log(`   - Classes DPE: ${classesDPE.join(', ')}`);
+      if (codesNAF && codesNAF.length > 1) console.log(`   - Codes NAF: ${codesNAF.join(', ')}`);
+    }
+
+    // === ÉTAPE 5: TRI PAR SCORE DÉCROISSANT ===
+    console.log('📈 Étape 5/5: Tri par pertinence...');
+
+    prospectsFiltres.sort((a, b) => b.scoreProduiCible - a.scoreProduiCible);
+
+    console.log('\n🎉 Prospection terminée!');
+    console.log(`📊 Résultats: ${prospectsFiltres.length} prospects qualifiés sur ${entreprises.length} recherchés`);
+
+    if (prospectsFiltres.length > 0) {
+      console.log(`🏆 Top prospect: ${prospectsFiltres[0].sirene?.denomination} (score ${prospectsFiltres[0].scoreProduiCible}/100)`);
+    }
+
+    return prospectsFiltres;
+  }
+
+  /**
+   * Enrichit un prospect avec toutes les sources de données
+   * @param {Object} entreprise - Données entreprise de base
+   * @param {string} produit - Type produit (pour optimiser les appels)
+   * @returns {Promise<Object>}
+   */
+  async enrichSingleProspect(entreprise, produit) {
+    const siret = entreprise.siret || entreprise.siege?.siret;
+
+    if (!siret) {
+      console.warn('⚠️  SIRET manquant');
+      return null;
+    }
+
+    const enrichedData = {
+      siret,
+      siren: siret.substring(0, 9),
+      dateEnrichissement: new Date().toISOString(),
+      produitCible: produit,
+      sources: [],
+      sirene: null,
+      ban: null,
+      rnb: null,
+      bdnb: null,
+      bdtopo: null,
+      georisques: null,
+      dpe: null
+    };
+
+    try {
+      // 1. SIRENE (données entreprise de base)
+      console.log('  📊 SIRENE...');
+      try {
+        const sireneData = await sireneService.getSiretInfo(siret);
+        enrichedData.sirene = sireneData;
+        enrichedData.sources.push('sirene');
+      } catch (error) {
+        // Utiliser données recherche si SIRENE échoue
+        enrichedData.sirene = {
+          denomination: entreprise.nom_complet || entreprise.denomination,
+          adresse: entreprise.siege || {},
+          codeNAF: entreprise.activite_principale,
+          actif: entreprise.etat_administratif === 'A'
+        };
+        enrichedData.sources.push('recherche-fallback');
+      }
+
+      const adresse = enrichedData.sirene.adresse;
+
+      if (!adresse) {
+        console.warn('  ⚠️  Adresse manquante - enrichissement limité');
+        return enrichedData;
+      }
+
+      // 2. BAN (géocodage + normalisation adresse)
+      console.log('  📍 BAN (géocodage)...');
+      try {
+        const banData = await banService.normalizeAddress(adresse);
+
+        if (banData && banData.coordinates) {
+          enrichedData.ban = banData;
+          enrichedData.coordinates = banData.coordinates;
+          enrichedData.sources.push('ban');
+          console.log(`    ✓ GPS: ${banData.coordinates.latitude}, ${banData.coordinates.longitude}`);
+        }
+      } catch (error) {
+        console.warn('  ⚠️  BAN échoué:', error.message);
+      }
+
+      // Si pas de coordonnées, impossible de continuer l'enrichissement géographique
+      if (!enrichedData.coordinates) {
+        console.warn('  ⚠️  Pas de coordonnées GPS - enrichissement géographique impossible');
+        return enrichedData;
+      }
+
+      const { latitude, longitude } = enrichedData.coordinates;
+
+      // 3. RNB (identifiant bâtiment national - PIVOT)
+      console.log('  🏢 RNB (bâtiment)...');
+      try {
+        const rnbData = await rnbService.getNearestBuildingWithHeight(latitude, longitude, 100);
+
+        if (rnbData) {
+          enrichedData.rnb = rnbData;
+          enrichedData.idRNB = rnbData.idRNB;
+          enrichedData.sources.push('rnb');
+          console.log(`    ✓ ID-RNB: ${rnbData.idRNB}`);
+        }
+      } catch (error) {
+        console.warn('  ⚠️  RNB échoué:', error.message);
+      }
+
+      // 4. BDNB (données techniques bâtiment) - via ID-RNB ou coordonnées
+      console.log('  🏗️  BDNB (données techniques)...');
+      try {
+        const bdnbCriteria = {
+          idRNB: enrichedData.idRNB,
+          coordinates: enrichedData.coordinates,
+          adresse: adresse
+        };
+
+        const bdnbData = await bdnbService.searchSmart(bdnbCriteria);
+
+        if (bdnbData) {
+          enrichedData.bdnb = bdnbData;
+          enrichedData.sources.push('bdnb');
+          console.log(`    ✓ BDNB trouvé - DPE: ${bdnbData.classeDPE || 'N/A'}, Surface: ${bdnbData.surfacePlancher || 'N/A'}m²`);
+        }
+      } catch (error) {
+        console.warn('  ⚠️  BDNB échoué:', error.message);
+      }
+
+      // 5. BD TOPO (hauteur bâtiment précise) - CRITIQUE pour destratification
+      if (produit === 'destratification') {
+        console.log('  📏 BD TOPO (hauteur)...');
+        try {
+          const bdtopoData = await bdtopoService.getNearestBuildingWithHeight(latitude, longitude, 100);
+
+          if (bdtopoData) {
+            enrichedData.bdtopo = bdtopoData;
+            enrichedData.sources.push('bdtopo');
+            console.log(`    ✓ Hauteur: ${bdtopoData.hauteur || bdtopoData.hauteurEstimee}m`);
+          }
+        } catch (error) {
+          console.warn('  ⚠️  BD TOPO échoué:', error.message);
+        }
+      }
+
+      // 6. Géorisques ICPE (sites industriels) - CRITIQUE pour matelas isolants
+      if (produit === 'matelas_isolants') {
+        console.log('  🏭 Géorisques (ICPE)...');
+        try {
+          const georisquesData = await georisquesService.searchByCoordinates(latitude, longitude, 500);
+
+          if (georisquesData && georisquesData.length > 0) {
+            enrichedData.georisques = georisquesData;
+            enrichedData.sources.push('georisques');
+            console.log(`    ✓ ${georisquesData.length} installation(s) ICPE trouvée(s)`);
+          }
+        } catch (error) {
+          console.warn('  ⚠️  Géorisques échoué:', error.message);
+        }
+      }
+
+      // 7. DPE (performance énergétique)
+      console.log('  ⚡ DPE (performance)...');
+      try {
+        // Essayer par SIRET d'abord (tertiaire)
+        let dpeData = await dpeService.searchBySiret(siret);
+
+        // Fallback: par adresse
+        if (!dpeData || dpeData.length === 0) {
+          dpeData = await dpeService.searchByAddress(adresse, 'tertiaire');
+        }
+
+        if (dpeData && dpeData.length > 0) {
+          enrichedData.dpe = dpeData;
+          enrichedData.sources.push('dpe');
+          console.log(`    ✓ ${dpeData.length} DPE trouvé(s) - Étiquette: ${dpeData[0].etiquetteDPE || 'N/A'}`);
+        }
+      } catch (error) {
+        console.warn('  ⚠️  DPE échoué:', error.message);
+      }
+
+      console.log(`  ✅ Enrichissement terminé - ${enrichedData.sources.length} sources`);
+
+      return enrichedData;
+
+    } catch (error) {
+      console.error('❌ Erreur enrichissement:', error.message);
+      return enrichedData; // Retourner données partielles
+    }
+  }
+
+  /**
+   * Recherche prospects par code NAF uniquement (simplifié)
+   * @param {string} codeNAF - Code NAF
+   * @param {string} produit - Type produit
+   * @param {Object} options - Options supplémentaires
+   * @returns {Promise<Array>}
+   */
+  async searchByNAF(codeNAF, produit, options = {}) {
+    return await this.searchEnriched({
+      codeNAF,
+      produit,
+      ...options
+    });
+  }
+
+  /**
+   * Recherche prospects par département
+   * @param {string} departement - Code département
+   * @param {string} produit - Type produit
+   * @param {Object} options - Options supplémentaires
+   * @returns {Promise<Array>}
+   */
+  async searchByDepartement(departement, produit, options = {}) {
+    return await this.searchEnriched({
+      departement,
+      produit,
+      ...options
+    });
+  }
+
+  /**
+   * Recherche prospects par région
+   * @param {string} region - Nom région
+   * @param {string} produit - Type produit
+   * @param {Object} options - Options supplémentaires
+   * @returns {Promise<Array>}
+   */
+  async searchByRegion(region, produit, options = {}) {
+    return await this.searchEnriched({
+      region,
+      produit,
+      ...options
+    });
+  }
+
+  /**
+   * Exporte les résultats au format CSV
+   * @param {Array} prospects - Liste de prospects
+   * @param {string} produit - Type produit
+   * @returns {string} CSV
+   */
+  exportToCSV(prospects, produit) {
+    const headers = [
+      'SIRET',
+      'Dénomination',
+      'Adresse',
+      'Code Postal',
+      'Commune',
+      'Code NAF',
+      'Score',
+      'Eligible',
+      'Raisons',
+      'Estimation CUMAC Min',
+      'Estimation CUMAC Max',
+      'Sources'
+    ];
+
+    const rows = prospects.map(p => [
+      p.siret,
+      p.sirene?.denomination || '',
+      p.sirene?.adresse?.adresseComplete || '',
+      p.sirene?.adresse?.codePostal || '',
+      p.sirene?.adresse?.commune || '',
+      p.sirene?.codeNAF || '',
+      p.scoreProduiCible,
+      p.eligibleProduitCible ? 'OUI' : 'NON',
+      p.raisonsProduitCible.join(' | '),
+      p.estimationCUMAC?.estimationBasse || '',
+      p.estimationCUMAC?.estimationHaute || '',
+      p.sources.join(', ')
+    ]);
+
+    const csvLines = [
+      headers.join(';'),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(';'))
+    ];
+
+    return csvLines.join('\n');
+  }
+
+  /**
+   * Méthode de compatibilité avec l'ancien endpoint /search
+   * Mappe l'ancien format vers searchEnriched()
+   * @param {Object} criteria - Critères anciens format
    * @returns {Promise<Object>}
    */
   async search(criteria) {
-    console.log('🔍 Recherche prospection:', JSON.stringify(criteria, null, 2));
+    console.log('⚠️  Utilisation ancienne méthode search() - redirection vers searchEnriched()');
 
     const {
-      codeNAF,           // Code NAF/APE (ex: "4120B")
-      codesNAF,          // Liste de codes NAF (ex: ["4120B", "4312A"])
-      departement,       // Code département (ex: "75")
-      region,            // Code région
-      codePostal,        // Code postal spécifique
-      typeProduit,       // destratification, pression, matelas_isolants
-      critereTechnique,  // Critères techniques spécifiques
-      limit              // Nombre max de résultats
+      codeNAF,
+      codesNAF,
+      departement,
+      region,
+      codePostal,
+      typeProduit,
+      limit
     } = criteria;
 
+    // Si typeProduit non spécifié, utiliser "destratification" par défaut
+    const produit = typeProduit || 'destratification';
+
+    // Gérer codesNAF (ancien format multi-NAF)
+    const nafToUse = codeNAF || (codesNAF && codesNAF[0]) || null;
+
     try {
-      const maxLimit = Math.min(limit || 100, this.maxResults);
-      let results = [];
+      const results = await this.searchEnriched({
+        codeNAF: nafToUse,
+        departement,
+        region,
+        codePostal,
+        produit,
+        limit: limit || 100,
+        enrichAll: false // Par défaut, enrichir seulement top 10
+      });
 
-      // Stratégie de recherche selon critères
-      if (codeNAF || codesNAF) {
-        // Recherche par code(s) NAF
-        results = await this.searchByNAF(codeNAF || codesNAF, {
-          departement,
-          region,
-          codePostal,
-          limit: maxLimit
-        });
-      } else if (departement || region) {
-        // Recherche géographique pure
-        results = await this.searchByGeo({
-          departement,
-          region,
-          codePostal
-        }, { limit: maxLimit });
-      } else {
-        throw new Error('Au moins un critère requis (NAF ou géographique)');
-      }
-
-      // Filtrage par critères techniques si spécifiés
-      if (typeProduit || critereTechnique) {
-        console.log(`🔧 Filtrage par critères techniques (${typeProduit})`);
-        results = await this.filterByTechnicalCriteria(results, {
-          typeProduit,
-          critereTechnique
-        });
-      }
-
-      // Enrichir avec données de contact si possible (téléphone)
-      if (criteria.enrichPhone && pappersService.isEnabled()) {
-        console.log('📞 Enrichissement numéros de téléphone...');
-        results = await this.enrichWithPhones(results.slice(0, 50)); // Limiter à 50 pour quota
-      }
-
-      // Calculer score de pertinence
-      results = results.map(r => ({
-        ...r,
-        scorePertinence: this.calculateRelevanceScore(r, criteria)
-      }));
-
-      // Trier par pertinence
-      results.sort((a, b) => b.scorePertinence - a.scorePertinence);
-
-      console.log(`✅ ${results.length} prospects trouvés`);
-
+      // Retourner dans l'ancien format attendu par le frontend
       return {
         total: results.length,
-        criteria,
-        results: results.slice(0, maxLimit),
+        criteria: criteria,
+        results: results.map(r => ({
+          ...r,
+          scorePertinence: r.scoreProduiCible,
+          bdnbData: r.bdnb,
+          recommandations: r.raisonsProduitCible.map(raison => ({
+            produit: produit,
+            pertinence: r.eligibleProduitCible ? 'haute' : 'moyenne',
+            raison
+          }))
+        })),
         metadata: {
           date: new Date().toISOString(),
-          sources: this.getUsedSources(results)
+          sources: ['recherche-entreprises', 'sirene', 'ban', 'rnb', 'bdnb', 'bdtopo', 'georisques', 'dpe']
         }
       };
 
     } catch (error) {
-      console.error('❌ Erreur recherche prospection:', error.message);
+      console.error('❌ Erreur dans search() de compatibilité:', error.message);
       throw error;
     }
   }
 
   /**
-   * Recherche par code(s) NAF
-   * @param {string|Array} nafCodes - Code(s) NAF
-   * @param {Object} filters - Filtres additionnels
-   * @returns {Promise<Array>}
+   * Formate les prospects pour l'export Excel/CSV
+   * @param {Array} prospects - Liste de prospects enrichis
+   * @returns {Array} Prospects formatés pour export
    */
-  async searchByNAF(nafCodes, filters = {}) {
-    const codes = Array.isArray(nafCodes) ? nafCodes : [nafCodes];
-    const allResults = [];
-
-    for (const code of codes) {
-      console.log(`📊 Recherche NAF: ${code}`);
-
-      try {
-        // Utiliser API Recherche Entreprises
-        const results = await rechercheService.searchByNAF(code, {
-          departement: filters.departement,
-          region: filters.region,
-          codePostal: filters.codePostal,
-          limit: Math.ceil(filters.limit / codes.length) // Répartir limite
-        });
-
-        allResults.push(...results);
-
-      } catch (error) {
-        console.warn(`⚠️  Erreur recherche NAF ${code}:`, error.message);
-      }
-    }
-
-    return this.deduplicateResults(allResults);
+  formatForExport(prospects) {
+    return prospects.map(p => ({
+      siret: p.siret || '',
+      siren: p.siren || '',
+      denomination: p.sirene?.denomination || '',
+      adresse: p.sirene?.adresse?.adresseComplete || '',
+      codePostal: p.sirene?.adresse?.codePostal || '',
+      commune: p.sirene?.adresse?.commune || '',
+      departement: p.sirene?.adresse?.departement || '',
+      region: p.ban?.region || '',
+      codeNAF: p.sirene?.codeNAF || '',
+      libelleNAF: p.sirene?.libelleNAF || '',
+      telephone: p.sirene?.telephone || '',
+      email: p.sirene?.email || '',
+      actif: p.sirene?.actif ? 'OUI' : 'NON',
+      scorePertinence: Math.round(p.scoreProduiCible || 0),
+      eligible: p.eligibleProduitCible ? 'OUI' : 'NON',
+      // Données techniques
+      hauteur: p.bdtopo?.hauteur || p.bdnb?.hauteur || p.rnb?.hauteur || '',
+      surface: p.bdnb?.surfacePlancher || p.rnb?.surface || '',
+      nbEtages: p.bdtopo?.etages || p.rnb?.nbEtages || '',
+      classeDPE: p.bdnb?.classeDPE || (p.dpe?.[0]?.etiquetteDPE) || '',
+      typeChauffage: p.bdnb?.typeChauffage || '',
+      energieChauffage: p.bdnb?.energieChauffage || '',
+      // Isolation
+      isolationToiture: p.bdnb?.isolationToiture || '',
+      isolationMurs: p.bdnb?.isolationMurs || '',
+      isolationFenetres: p.bdnb?.isolationFenetres || '',
+      // ICPE (pour matelas isolants)
+      siteICPE: p.georisques?.length > 0 ? 'OUI' : 'NON',
+      typeICPE: p.georisques?.[0]?.typeIndustrie || '',
+      // Recommandations
+      produitsRecommandes: p.raisonsProduitCible?.join(' | ') || '',
+      // Estimation CUMAC
+      cumacMin: p.estimationCUMAC?.estimationBasse || '',
+      cumacMax: p.estimationCUMAC?.estimationHaute || '',
+      // Métadonnées
+      nbSourcesEnrichies: p.sources?.length || 0,
+      sourcesUtilisees: p.sources?.join(', ') || '',
+      dateEnrichissement: p.dateEnrichissement || ''
+    }));
   }
 
   /**
-   * Recherche géographique
-   * @param {Object} geo - Filtres géographiques
-   * @param {Object} options - Options
-   * @returns {Promise<Array>}
-   */
-  async searchByGeo(geo, options = {}) {
-    console.log('🗺️  Recherche géographique:', geo);
-
-    try {
-      const results = await rechercheService.searchByGeo(geo, {
-        limit: options.limit || 100
-      });
-
-      return results;
-
-    } catch (error) {
-      console.error('Erreur recherche géographique:', error.message);
-      return [];
-    }
-  }
-
-  /**
-   * Filtre les résultats par critères techniques
-   * @param {Array} results - Résultats de recherche
-   * @param {Object} criteria - Critères techniques
-   * @returns {Promise<Array>}
-   */
-  async filterByTechnicalCriteria(results, criteria) {
-    const { typeProduit, critereTechnique } = criteria;
-
-    if (!typeProduit) return results;
-
-    const filteredResults = [];
-
-    // Récupérer codes NAF pertinents pour le produit
-    const relevantNAF = this.getRelevantNAFForProduct(typeProduit);
-
-    for (const result of results) {
-      try {
-        // Vérifier code NAF
-        const nafMatch = this.matchesNAFCriteria(result.codeNAF, relevantNAF);
-
-        if (!nafMatch) continue;
-
-        // Si critères techniques spécifiques, enrichir avec BDNB
-        if (critereTechnique && result.adresse) {
-          const bdnbData = await this.getBuildingDataForFiltering(result.adresse);
-
-          if (bdnbData) {
-            const techMatch = this.matchesTechnicalCriteria(bdnbData, critereTechnique, typeProduit);
-
-            if (techMatch) {
-              result.bdnbData = bdnbData;
-              result.recommandations = bdnbService.recommendProducts(bdnbData);
-              filteredResults.push(result);
-            }
-          }
-        } else {
-          // Sans critères techniques détaillés, garder tous ceux avec bon NAF
-          filteredResults.push(result);
-        }
-
-      } catch (error) {
-        console.warn(`Erreur filtrage ${result.siret}:`, error.message);
-      }
-    }
-
-    console.log(`🔧 Filtrage: ${results.length} → ${filteredResults.length} résultats`);
-
-    return filteredResults;
-  }
-
-  /**
-   * Codes NAF pertinents par type de produit
-   * @param {string} typeProduit
-   * @returns {Array<string>}
+   * Retourne les codes NAF pertinents pour un type de produit
+   * @param {string} typeProduit - destratification | pression | matelas_isolants
+   * @returns {Array} Liste de codes NAF avec pertinence
    */
   getRelevantNAFForProduct(typeProduit) {
-    const nafMapping = {
+    const NAF_BY_PRODUCT = {
       destratification: [
-        '4120B', // Construction autres bâtiments
-        '4321A', // Travaux d'installation électrique
-        '4322A', // Travaux d'installation eau/gaz
-        '4322B', // Travaux d'installation équipements thermiques
-        '4329A', // Travaux d'isolation
-        '4120A', // Construction maisons individuelles
-        '4333Z', // Travaux de revêtement des sols et des murs
+        { code: '47.11F', label: 'Hypermarchés', pertinence: 'très haute', raison: 'Grands volumes avec hauteur >8m' },
+        { code: '47.11D', label: 'Supermarchés', pertinence: 'très haute', raison: 'Surfaces importantes avec hauteur' },
+        { code: '52.10A', label: 'Entreposage et stockage frigorifique', pertinence: 'très haute', raison: 'Entrepôts >10m de hauteur' },
+        { code: '52.10B', label: 'Entreposage et stockage non frigorifique', pertinence: 'très haute', raison: 'Entrepôts >10m de hauteur' },
+        { code: '56.10A', label: 'Restauration traditionnelle', pertinence: 'haute', raison: 'Cuisines avec hauteur et zones chaudes' },
+        { code: '56.10C', label: 'Restauration de type rapide', pertinence: 'haute', raison: 'Cuisines avec zones chaudes' },
+        { code: '56.29A', label: 'Restauration collective sous contrat', pertinence: 'haute', raison: 'Cuisines collectives' },
+        { code: '93.11Z', label: 'Gestion d\'installations sportives', pertinence: 'très haute', raison: 'Salles de sport >8m' },
+        { code: '10.11Z', label: 'Transformation et conservation de la viande de boucherie', pertinence: 'haute', raison: 'Usines agroalimentaires' },
+        { code: '10.13A', label: 'Préparation industrielle de produits à base de viande', pertinence: 'haute', raison: 'Usines agroalimentaires' },
+        { code: '10.71A', label: 'Fabrication industrielle de pain et de pâtisserie fraîche', pertinence: 'haute', raison: 'Fours industriels avec hauteur' },
+        { code: '41.20A', label: 'Construction de maisons individuelles', pertinence: 'moyenne', raison: 'Hangars de chantier' },
+        { code: '41.20B', label: 'Construction d\'autres bâtiments', pertinence: 'moyenne', raison: 'Hangars de chantier' }
       ],
       pression: [
-        '4322A', // Travaux d'installation eau/gaz
-        '4322B', // Travaux d'installation équipements thermiques
-        '4329A', // Travaux d'isolation
-        '3511Z', // Production d'électricité
-        '3530Z', // Production et distribution de vapeur
+        { code: '86.10Z', label: 'Activités hospitalières', pertinence: 'très haute', raison: 'Hôpitaux avec chauffage collectif' },
+        { code: '87.10A', label: 'Hébergement médicalisé pour personnes âgées', pertinence: 'très haute', raison: 'EHPAD avec chauffage central' },
+        { code: '87.20A', label: 'Hébergement social pour handicapés mentaux', pertinence: 'haute', raison: 'Établissements avec chauffage collectif' },
+        { code: '87.30A', label: 'Hébergement social pour personnes âgées', pertinence: 'haute', raison: 'Résidences avec chauffage collectif' },
+        { code: '55.10Z', label: 'Hôtels et hébergement similaire', pertinence: 'très haute', raison: 'Hôtels avec chauffage central' },
+        { code: '55.20Z', label: 'Hébergement touristique et autre hébergement de courte durée', pertinence: 'haute', raison: 'Résidences avec chauffage' },
+        { code: '85.31Z', label: 'Enseignement secondaire général', pertinence: 'haute', raison: 'Collèges/Lycées avec chauffage collectif' },
+        { code: '85.32Z', label: 'Enseignement secondaire technique ou professionnel', pertinence: 'haute', raison: 'Établissements avec chauffage collectif' },
+        { code: '85.42Z', label: 'Enseignement supérieur', pertinence: 'haute', raison: 'Universités avec chauffage collectif' },
+        { code: '93.13Z', label: 'Activités de centres de culture physique', pertinence: 'moyenne', raison: 'Centres sportifs avec chauffage' },
+        { code: '68.20A', label: 'Location de logements', pertinence: 'haute', raison: 'Bailleurs sociaux avec chauffage collectif' },
+        { code: '68.20B', label: 'Location de terrains et d\'autres biens immobiliers', pertinence: 'moyenne', raison: 'Gestionnaires immobiliers' }
       ],
       matelas_isolants: [
-        '4329A', // Travaux d'isolation
-        '4322B', // Travaux d'installation équipements thermiques
-        '4120B', // Construction autres bâtiments
-        '4391A', // Travaux de charpente
-        '4399C', // Travaux de maçonnerie
+        { code: '24.10Z', label: 'Sidérurgie', pertinence: 'très haute', raison: 'Sites ICPE avec fours industriels' },
+        { code: '24.51Z', label: 'Fonderie de métaux ferreux', pertinence: 'très haute', raison: 'Sites ICPE avec fours >1000°C' },
+        { code: '24.52Z', label: 'Fonderie de métaux légers', pertinence: 'très haute', raison: 'Sites ICPE avec fours industriels' },
+        { code: '24.53Z', label: 'Fonderie d\'autres métaux non ferreux', pertinence: 'très haute', raison: 'Sites ICPE avec fours' },
+        { code: '25.11Z', label: 'Fabrication de structures métalliques', pertinence: 'haute', raison: 'Ateliers ICPE avec soudage' },
+        { code: '20.11Z', label: 'Fabrication de gaz industriels', pertinence: 'très haute', raison: 'Sites ICPE avec installations cryogéniques' },
+        { code: '20.13A', label: 'Enrichissement et retraitement de matières nucléaires', pertinence: 'très haute', raison: 'Sites ICPE sensibles' },
+        { code: '20.14Z', label: 'Fabrication d\'autres produits chimiques organiques de base', pertinence: 'très haute', raison: 'Sites ICPE chimie' },
+        { code: '20.15Z', label: 'Fabrication de produits azotés et d\'engrais', pertinence: 'haute', raison: 'Sites ICPE avec process thermiques' },
+        { code: '10.11Z', label: 'Transformation et conservation de la viande de boucherie', pertinence: 'haute', raison: 'Chambres froides industrielles' },
+        { code: '10.13A', label: 'Préparation industrielle de produits à base de viande', pertinence: 'haute', raison: 'Installations frigorifiques' },
+        { code: '10.20Z', label: 'Transformation et conservation de poisson', pertinence: 'haute', raison: 'Chambres froides' },
+        { code: '10.51A', label: 'Exploitation de laiteries et fabrication de fromage', pertinence: 'haute', raison: 'Process thermiques et froids' },
+        { code: '23.51Z', label: 'Fabrication de ciment', pertinence: 'très haute', raison: 'Sites ICPE avec fours rotatifs' },
+        { code: '23.52Z', label: 'Fabrication de chaux et plâtre', pertinence: 'haute', raison: 'Sites ICPE avec fours' },
+        { code: '29.10Z', label: 'Construction de véhicules automobiles', pertinence: 'haute', raison: 'Usines avec cabines de peinture' }
       ]
     };
 
-    return nafMapping[typeProduit] || [];
+    const result = NAF_BY_PRODUCT[typeProduit] || [];
+
+    // Trier par pertinence (très haute > haute > moyenne)
+    const pertinenceOrder = { 'très haute': 3, 'haute': 2, 'moyenne': 1 };
+    result.sort((a, b) => pertinenceOrder[b.pertinence] - pertinenceOrder[a.pertinence]);
+
+    return result;
   }
 
   /**
-   * Vérifie si le code NAF correspond aux critères
-   * @param {string} codeNAF - Code NAF de l'entreprise
-   * @param {Array} relevantNAF - Codes NAF pertinents
-   * @returns {boolean}
+   * Pause async
+   * @param {number} ms - Millisecondes
+   * @returns {Promise}
    */
-  matchesNAFCriteria(codeNAF, relevantNAF) {
-    if (!relevantNAF || relevantNAF.length === 0) return true;
-    if (!codeNAF) return false;
-
-    // Match exact ou par préfixe (ex: "4120" match "4120A" et "4120B")
-    return relevantNAF.some(naf =>
-      codeNAF === naf || codeNAF.startsWith(naf.substring(0, 4))
-    );
-  }
-
-  /**
-   * Récupère les données bâtiment pour filtrage (avec cache)
-   * @param {Object} adresse - Adresse de l'établissement
-   * @returns {Promise<Object|null>}
-   */
-  async getBuildingDataForFiltering(adresse) {
-    const cacheKey = `prospection:bdnb:${JSON.stringify(adresse)}`;
-
-    return await cacheService.getOrSet(cacheKey, async () => {
-      const bdnbResults = await bdnbService.searchByAddress(adresse);
-      return bdnbResults && bdnbResults.length > 0 ? bdnbResults[0] : null;
-    }, 7200);
-  }
-
-  /**
-   * Vérifie si un bâtiment correspond aux critères techniques
-   * @param {Object} buildingData - Données BDNB
-   * @param {Object} criteria - Critères techniques
-   * @param {string} typeProduit - Type de produit
-   * @returns {boolean}
-   */
-  matchesTechnicalCriteria(buildingData, criteria, typeProduit) {
-    if (!buildingData) return false;
-
-    switch (typeProduit) {
-      case 'destratification':
-        // Hauteur minimale pour destratification
-        if (criteria.hauteurMin && buildingData.hauteur < criteria.hauteurMin) {
-          return false;
-        }
-        // Surface minimale
-        if (criteria.surfaceMin && buildingData.surfacePlancher < criteria.surfaceMin) {
-          return false;
-        }
-        return true;
-
-      case 'pression':
-        // Surface importante
-        if (buildingData.surfacePlancher < 500) return false;
-        return true;
-
-      case 'matelas_isolants':
-        // Mauvaise performance énergétique
-        if (buildingData.classeDPE && ['E', 'F', 'G'].includes(buildingData.classeDPE)) {
-          return true;
-        }
-        return false;
-
-      default:
-        return true;
-    }
-  }
-
-  /**
-   * Enrichit les résultats avec numéros de téléphone
-   * @param {Array} results - Résultats à enrichir
-   * @returns {Promise<Array>}
-   */
-  async enrichWithPhones(results) {
-    const enriched = [];
-
-    for (const result of results) {
-      try {
-        const contact = await pappersService.getContactInfo(result.siren);
-
-        if (contact && contact.telephone) {
-          result.telephone = contact.telephone;
-          result.email = contact.email;
-          result.enrichiContact = true;
-        }
-
-        enriched.push(result);
-
-      } catch (error) {
-        console.warn(`Erreur enrichissement contact ${result.siren}:`, error.message);
-        enriched.push(result);
-      }
-    }
-
-    return enriched;
-  }
-
-  /**
-   * Calcule un score de pertinence pour un prospect
-   * @param {Object} result - Résultat
-   * @param {Object} criteria - Critères de recherche
-   * @returns {number}
-   */
-  calculateRelevanceScore(result, criteria) {
-    let score = 50; // Score de base
-
-    // Bonus si NAF exact
-    if (criteria.codeNAF && result.codeNAF === criteria.codeNAF) {
-      score += 20;
-    }
-
-    // Bonus si données techniques disponibles
-    if (result.bdnbData) score += 15;
-
-    // Bonus si recommandations produit
-    if (result.recommandations && result.recommandations.length > 0) {
-      score += 10;
-    }
-
-    // Bonus si contact enrichi
-    if (result.telephone) score += 10;
-    if (result.email) score += 5;
-
-    // Bonus si entreprise active
-    if (result.actif) score += 5;
-
-    return Math.min(score, 100);
-  }
-
-  /**
-   * Déduplique les résultats par SIRET
-   * @param {Array} results - Résultats
-   * @returns {Array}
-   */
-  deduplicateResults(results) {
-    const seen = new Set();
-    return results.filter(r => {
-      if (seen.has(r.siret)) return false;
-      seen.add(r.siret);
-      return true;
-    });
-  }
-
-  /**
-   * Obtient les sources utilisées
-   * @param {Array} results - Résultats
-   * @returns {Array}
-   */
-  getUsedSources(results) {
-    const sources = new Set();
-    results.forEach(r => {
-      if (r._source) sources.add(r._source);
-      if (r.bdnbData) sources.add('bdnb');
-      if (r.enrichiContact) sources.add('pappers');
-    });
-    return Array.from(sources);
-  }
-
-  /**
-   * Exporte les résultats au format standard
-   * @param {Array} results - Résultats de prospection
-   * @returns {Array}
-   */
-  formatForExport(results) {
-    return results.map(r => ({
-      // Identification
-      siret: r.siret,
-      siren: r.siren,
-      denomination: r.denomination,
-
-      // Localisation
-      adresse: r.adresse?.adresseComplete || '',
-      codePostal: r.adresse?.codePostal || '',
-      commune: r.adresse?.commune || '',
-
-      // Activité
-      codeNAF: r.codeNAF,
-      libelleNAF: r.libelleNAF,
-
-      // Contact
-      telephone: r.telephone || '',
-      email: r.email || '',
-
-      // Statut
-      actif: r.actif ? 'Oui' : 'Non',
-
-      // Scoring
-      scorePertinence: r.scorePertinence || 0,
-
-      // Données techniques (si disponibles)
-      hauteur: r.bdnbData?.hauteur || '',
-      surface: r.bdnbData?.surfacePlancher || '',
-      classeDPE: r.bdnbData?.classeDPE || '',
-
-      // Recommandations
-      produitsRecommandes: r.recommandations?.map(rec => rec.produit).join(', ') || ''
-    }));
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
 

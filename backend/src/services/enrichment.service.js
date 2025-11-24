@@ -1,5 +1,6 @@
 const sireneService = require('./external-api/sirene.service');
 const rechercheService = require('./external-api/recherche.service');
+const banService = require('./external-api/ban.service');
 const dpeService = require('./external-api/dpe.service');
 const bdnbService = require('./external-api/bdnb.service');
 const pappersService = require('./external-api/pappers.service');
@@ -12,7 +13,7 @@ const cacheService = require('./cache.service');
 class EnrichmentService {
   constructor() {
     this.autoEnrichmentEnabled = process.env.AUTO_ENRICHMENT_ENABLED !== 'false';
-    this.enabledSources = (process.env.ENRICHMENT_SOURCES || 'sirene,dpe,bdnb').split(',');
+    this.enabledSources = (process.env.ENRICHMENT_SOURCES || 'sirene,ban,dpe').split(',');
   }
 
   /**
@@ -71,12 +72,55 @@ class EnrichmentService {
         }
       }
 
-      // Si pas de données de base, impossible de continuer
+      // Si pas de données de base, retourner données minimales
       if (!enrichedData.adresse) {
-        throw new Error('Impossible de récupérer les données de base de l\'entreprise');
+        console.warn('⚠️  Impossible de récupérer l\'adresse - retour données minimales');
+        return {
+          ...enrichedData,
+          enrichmentStatus: 'partial',
+          enrichmentWarning: 'Données automatiques non disponibles. APIs externes non configurées ou entreprise non trouvée.',
+          message: 'Veuillez remplir manuellement les informations de l\'entreprise.'
+        };
       }
 
-      // 2. Données BDNB (bâtiment)
+      // 2. Géocodage et normalisation BAN (Base Adresse Nationale)
+      if (this.isSourceEnabled('ban') && enrichedData.adresse) {
+        console.log('📍 Géocodage adresse avec BAN...');
+        try {
+          const banData = await banService.normalizeAddress(enrichedData.adresse);
+
+          if (banData && banData.normalized) {
+            enrichedData.donnees.ban = banData;
+            enrichedData.sources.push('ban');
+
+            // Enrichir l'adresse avec données normalisées
+            enrichedData.adresse = {
+              ...enrichedData.adresse,
+              adresseComplete: banData.adresseComplete,
+              codePostal: banData.codePostal || enrichedData.adresse.codePostal,
+              commune: banData.commune || enrichedData.adresse.commune,
+              codeINSEE: banData.codeINSEE,
+              departement: banData.departement,
+              region: banData.region
+            };
+
+            // Ajouter coordonnées GPS
+            if (banData.coordinates) {
+              enrichedData.coordinates = banData.coordinates;
+            }
+
+            console.log(`✅ BAN: Adresse normalisée - Score: ${banData.score.toFixed(2)}`);
+          } else {
+            console.warn('⚠️  BAN: Normalisation impossible, utilisation adresse SIRENE brute');
+          }
+
+        } catch (error) {
+          console.warn('⚠️  Erreur BAN:', error.message);
+          // Ne pas bloquer l'enrichissement si BAN échoue
+        }
+      }
+
+      // 3. Données BDNB (bâtiment)
       if (this.isSourceEnabled('bdnb') && enrichedData.adresse) {
         console.log('🏢 Récupération données BDNB...');
         try {
@@ -106,10 +150,11 @@ class EnrichmentService {
           }
         } catch (error) {
           console.warn('⚠️  Erreur BDNB:', error.message);
+          // Ne pas bloquer l'enrichissement si BDNB échoue (service optionnel)
         }
       }
 
-      // 3. Données DPE (performance énergétique)
+      // 4. Données DPE (performance énergétique)
       if (this.isSourceEnabled('dpe') && enrichedData.adresse) {
         console.log('⚡ Récupération données DPE...');
         try {
@@ -141,7 +186,7 @@ class EnrichmentService {
         }
       }
 
-      // 4. Données Pappers (optionnel - contacts)
+      // 5. Données Pappers (optionnel - contacts)
       if (pappersService.isEnabled() && this.isSourceEnabled('pappers')) {
         console.log('📞 Récupération données Pappers...');
         try {

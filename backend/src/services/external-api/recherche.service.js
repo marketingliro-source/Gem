@@ -41,7 +41,10 @@ class RechercheEntreprisesService {
    * @returns {Promise<Array>}
    */
   async search(query, options = {}) {
+    console.log('🔍🔍🔍 [RECHERCHE SERVICE] search() appelé avec:', { query, options });
+
     if (!query || query.trim().length < 2) {
+      console.log('⚠️  [RECHERCHE SERVICE] Query trop courte ou vide, retour []');
       return [];
     }
 
@@ -58,19 +61,44 @@ class RechercheEntreprisesService {
     if (options.codeNAF) params.activite_principale = options.codeNAF;
     if (options.minEmployes) params.min_matching_etablissements = options.minEmployes;
 
+    console.log('📦 [RECHERCHE SERVICE] Paramètres construits pour API:', JSON.stringify(params, null, 2));
+    console.log('🌐 [RECHERCHE SERVICE] URL complète:', this.baseURL + '?' + new URLSearchParams(params).toString());
+
     const cacheKey = `recherche:${JSON.stringify(params)}`;
 
     return await cacheService.getOrSet(cacheKey, async () => {
       await cacheService.waitForRateLimit('recherche');
 
       try {
+        console.log('🚀 [RECHERCHE SERVICE] Envoi requête HTTP GET...');
         const response = await this.client.get('', { params });
 
+        console.log('✅ [RECHERCHE SERVICE] Réponse reçue - Status:', response.status);
+        console.log('📊 [RECHERCHE SERVICE] Données brutes response.data:', JSON.stringify(response.data, null, 2));
+
         const results = response.data.results || [];
-        return results.map(item => this.formatResult(item));
+        console.log(`📈 [RECHERCHE SERVICE] Nombre de résultats trouvés: ${results.length}`);
+
+        if (results.length > 0) {
+          console.log('👉 [RECHERCHE SERVICE] Premier résultat brut:', JSON.stringify(results[0], null, 2));
+        }
+
+        const formatted = results.map(item => this.formatResult(item));
+        console.log(`✅ [RECHERCHE SERVICE] Résultats formatés: ${formatted.length} entreprises`);
+
+        if (formatted.length > 0) {
+          console.log('👉 [RECHERCHE SERVICE] Premier résultat formaté:', JSON.stringify(formatted[0], null, 2));
+        }
+
+        return formatted;
 
       } catch (error) {
-        console.error('Erreur API Recherche Entreprises:', error.message);
+        console.error('❌❌❌ [RECHERCHE SERVICE] Erreur API Recherche Entreprises:', error.message);
+        if (error.response) {
+          console.error('📛 [RECHERCHE SERVICE] Status HTTP:', error.response.status);
+          console.error('📛 [RECHERCHE SERVICE] Données erreur:', JSON.stringify(error.response.data, null, 2));
+        }
+        console.error('📛 [RECHERCHE SERVICE] Stack trace:', error.stack);
         return [];
       }
     }, 1800); // Cache 30 minutes

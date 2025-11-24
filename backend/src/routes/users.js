@@ -8,9 +8,19 @@ const router = express.Router();
 // Récupérer tous les utilisateurs (admin seulement)
 router.get('/', authenticateToken, requireAdmin, (req, res) => {
   try {
+    console.log('GET /users - User:', req.user?.username, 'Role:', req.user?.role);
+
+    // Vérifier que la base de données est accessible
+    if (!db) {
+      console.error('Database connection is undefined');
+      return res.status(500).json({ error: 'Database not available' });
+    }
+
     const users = db.prepare('SELECT id, username, role, allowed_ip, ip_restriction_enabled, created_at FROM users').all();
+    console.log(`GET /users - Found ${users.length} users`);
     res.json(users);
   } catch (error) {
+    console.error('Error in GET /users:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -24,7 +34,7 @@ router.post('/', authenticateToken, requireAdmin, (req, res) => {
       return res.status(400).json({ error: 'Données manquantes' });
     }
 
-    if (!['admin', 'agent'].includes(role)) {
+    if (!['admin', 'telepro'].includes(role)) {
       return res.status(400).json({ error: 'Rôle invalide' });
     }
 
@@ -77,7 +87,7 @@ router.patch('/:id', authenticateToken, requireAdmin, (req, res) => {
       params.push(hashedPassword);
     }
 
-    if (role && ['admin', 'agent'].includes(role)) {
+    if (role && ['admin', 'telepro'].includes(role)) {
       updates.push('role = ?');
       params.push(role);
     }
@@ -121,10 +131,20 @@ router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
-// Récupérer les agents pour attribution
+// Récupérer les télépros pour attribution
+router.get('/telepros', authenticateToken, (req, res) => {
+  try {
+    const telepros = db.prepare('SELECT id, username FROM users WHERE role = ?').all('telepro');
+    res.json(telepros);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Alias pour compatibilité avec Calendar.jsx
 router.get('/agents', authenticateToken, (req, res) => {
   try {
-    const agents = db.prepare('SELECT id, username FROM users WHERE role = ?').all('agent');
+    const agents = db.prepare('SELECT id, username FROM users WHERE role = ?').all('telepro');
     res.json(agents);
   } catch (error) {
     res.status(500).json({ error: error.message });

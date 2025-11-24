@@ -50,9 +50,9 @@ db.exec(`
     -- Code NAF
     code_naf TEXT,
 
-    -- Statut (11 étapes)
+    -- Statut (10 étapes)
     statut TEXT NOT NULL DEFAULT 'nouveau' CHECK(statut IN (
-      'nouveau', 'nrp', 'a_rappeler', 'mail_infos_envoye', 'infos_recues',
+      'nouveau', 'a_rappeler', 'mail_infos_envoye', 'infos_recues',
       'devis_envoye', 'devis_signe', 'pose_prevue', 'pose_terminee', 'coffrac', 'termine'
     )),
 
