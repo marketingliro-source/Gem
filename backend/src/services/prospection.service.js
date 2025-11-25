@@ -523,20 +523,7 @@ class ProspectionService {
       finalProspects = finalProspects.filter(p => {
         let match = true;
 
-        // Filtrage par code NAF enrichi (depuis SIRENE)
-        if (nafCodes.length > 0) {
-          const prospectNAF = p.sirene?.codeNAF;
-          if (prospectNAF) {
-            const prospectNAFNormalized = prospectNAF.replace(/\./g, '');
-            const nafMatch = nafCodes.some(code => {
-              const codeNormalized = code.replace(/\./g, '');
-              return prospectNAFNormalized.startsWith(codeNormalized);
-            });
-            if (!nafMatch) match = false;
-          } else {
-            match = false;
-          }
-        }
+        // Pas de re-filtrage NAF ici - déjà fait par l'API en Phase 1
 
         // Hauteur minimale (filtre uniquement si donnée disponible)
         if (match && hauteurMin) {
