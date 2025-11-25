@@ -68,11 +68,37 @@ class ProspectionService {
     console.log('📊📊📊 Étape 1/5: Recherche entreprises...');
     console.log('📋 [PROSPECTION] Critères reçus:', { codeNAF, codesNAF, departement, region, codePostal, commune, produit, limit });
 
+    // Mapping code région → nom région pour l'API
+    const REGION_CODE_TO_NAME = {
+      '11': 'Île-de-France',
+      '24': 'Centre-Val de Loire',
+      '27': 'Bourgogne-Franche-Comté',
+      '28': 'Normandie',
+      '32': 'Hauts-de-France',
+      '44': 'Grand Est',
+      '52': 'Pays de la Loire',
+      '53': 'Bretagne',
+      '75': 'Nouvelle-Aquitaine',
+      '76': 'Occitanie',
+      '84': 'Auvergne-Rhône-Alpes',
+      '93': "Provence-Alpes-Côte d'Azur",
+      '94': 'Corse'
+    };
+
     const searchParams = {};
     // Gérer multi-NAF : utiliser le premier code pour la recherche (l'API n'accepte qu'un seul NAF)
     const nafToUse = codesNAF && codesNAF.length > 0 ? codesNAF[0] : codeNAF;
-    if (nafToUse) searchParams.codeNAF = nafToUse;
+    if (nafToUse) {
+      // Normaliser le code NAF : retirer les points (47.11F → 4711F)
+      searchParams.codeNAF = nafToUse.replace(/\./g, '');
+      console.log(`🔧 Code NAF normalisé: ${nafToUse} → ${searchParams.codeNAF}`);
+    }
     if (departement) searchParams.departement = departement;
+    if (region) {
+      // Convertir code région en nom si c'est un code numérique
+      searchParams.region = REGION_CODE_TO_NAME[region] || region;
+      console.log(`🔧 Région convertie: ${region} → ${searchParams.region}`);
+    }
     if (codePostal) searchParams.codePostal = codePostal;  // 🔧 FIX: utiliser "codePostal" pas "code_postal"
     if (commune) searchParams.commune = commune;
 
