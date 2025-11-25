@@ -31,7 +31,6 @@ const Prospection = () => {
     codesNAF: [], // Support multi-NAF
     departement: '',
     region: '',
-    codePostal: '',
     typeProduit: '',
     enrichPhone: false,
     limit: 100, // 100 par défaut (aligné avec backend)
@@ -569,19 +568,6 @@ const Prospection = () => {
               placeholder="Ex: 75, 69, 13..."
               className={styles.input}
               maxLength={3}
-            />
-          </div>
-
-          {/* Code Postal */}
-          <div className={styles.filterGroup}>
-            <label>Code Postal</label>
-            <input
-              type="text"
-              value={filters.codePostal}
-              onChange={(e) => handleFilterChange('codePostal', e.target.value)}
-              placeholder="Ex: 75001"
-              className={styles.input}
-              maxLength={5}
             />
           </div>
 
