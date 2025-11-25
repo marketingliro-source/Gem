@@ -10,11 +10,11 @@ const Prospection = () => {
   const [totalResults, setTotalResults] = useState(0);
   const [nafSuggestions, setNafSuggestions] = useState([]);
 
-  // États pour la modale de recherche NAF complète
-  const [showNafModal, setShowNafModal] = useState(false);
-  const [nafSearchQuery, setNafSearchQuery] = useState('');
-  const [nafSearchResults, setNafSearchResults] = useState([]);
-  const [nafSearchLoading, setNafSearchLoading] = useState(false);
+  // États pour l'autocomplete NAF
+  const [nafAutocompleteQuery, setNafAutocompleteQuery] = useState('');
+  const [nafAutocompleteSuggestions, setNafAutocompleteSuggestions] = useState([]);
+  const [nafAutocompleteLoading, setNafAutocompleteLoading] = useState(false);
+  const [showNafAutocomplete, setShowNafAutocomplete] = useState(false);
 
   const [filters, setFilters] = useState({
     codesNAF: [], // Support multi-NAF
@@ -139,41 +139,67 @@ const Prospection = () => {
     });
   };
 
-  // Rechercher dans tous les 732 codes NAF
-  const searchAllNafCodes = async (query) => {
-    setNafSearchLoading(true);
+  // Recherche autocomplete NAF (recherche dans tous les 732 codes)
+  const searchNafAutocomplete = async (query) => {
+    if (!query || query.trim().length < 2) {
+      setNafAutocompleteSuggestions([]);
+      return;
+    }
+
+    setNafAutocompleteLoading(true);
     try {
       const response = await api.get(`/prospection/naf/search`, {
-        params: { query: query || '', limit: 100 }
+        params: { query: query.trim(), limit: 50 }
       });
-      setNafSearchResults(response.data.codes || []);
+      setNafAutocompleteSuggestions(response.data.codes || []);
+      setShowNafAutocomplete(true);
     } catch (error) {
       console.error('Erreur recherche NAF:', error);
-      setNafSearchResults([]);
+      setNafAutocompleteSuggestions([]);
     } finally {
-      setNafSearchLoading(false);
+      setNafAutocompleteLoading(false);
     }
   };
 
-  // Ajouter un code NAF depuis la modale
-  const addNafCodeFromModal = (code) => {
+  // Effet pour déclencher la recherche avec un délai (debounce)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (nafAutocompleteQuery) {
+        searchNafAutocomplete(nafAutocompleteQuery);
+      } else {
+        setNafAutocompleteSuggestions([]);
+        setShowNafAutocomplete(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [nafAutocompleteQuery]);
+
+  // Ajouter un code NAF depuis l'autocomplete
+  const addNafCodeFromAutocomplete = (code) => {
     if (!filters.codesNAF.includes(code)) {
       setFilters({
         ...filters,
         codesNAF: [...filters.codesNAF, code]
       });
     }
-    setShowNafModal(false);
-    setNafSearchQuery('');
-    setNafSearchResults([]);
+    // Réinitialiser l'autocomplete
+    setNafAutocompleteQuery('');
+    setNafAutocompleteSuggestions([]);
+    setShowNafAutocomplete(false);
   };
 
-  // Charger les premiers résultats quand la modale s'ouvre
+  // Fermer l'autocomplete quand on clique ailleurs
   useEffect(() => {
-    if (showNafModal && nafSearchResults.length === 0) {
-      searchAllNafCodes(''); // Charger les 100 premiers
-    }
-  }, [showNafModal]);
+    const handleClickOutside = (event) => {
+      if (showNafAutocomplete && !event.target.closest('.nafAutocompleteWrapper')) {
+        setShowNafAutocomplete(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showNafAutocomplete]);
 
   // Toggle type chauffage
   const toggleTypeChauffage = (type) => {
@@ -363,44 +389,65 @@ const Prospection = () => {
               </div>
             )}
 
-            {/* Liste de sélection des codes NAF */}
-            <div className={styles.nafSelector}>
-              <select
-                onChange={(e) => {
-                  if (e.target.value) {
-                    toggleNafCode(e.target.value);
-                    e.target.value = ''; // Reset
-                  }
-                }}
-                className={styles.select}
-                value=""
-              >
-                <option value="">+ Ajouter un code NAF...</option>
-                {nafSuggestions.map(naf => (
-                  <option
-                    key={naf.code}
-                    value={naf.code}
-                    disabled={filters.codesNAF.includes(naf.code)}
-                  >
-                    {naf.code} - {naf.label}
-                    {naf.pertinence && ` (${naf.pertinence})`}
-                  </option>
-                ))}
-              </select>
+            {/* Champ de recherche autocomplete pour les codes NAF */}
+            <div className={`${styles.nafSelector} nafAutocompleteWrapper`} style={{ position: 'relative' }}>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="text"
+                  value={nafAutocompleteQuery}
+                  onChange={(e) => setNafAutocompleteQuery(e.target.value)}
+                  onFocus={() => {
+                    if (nafAutocompleteSuggestions.length > 0) {
+                      setShowNafAutocomplete(true);
+                    }
+                  }}
+                  placeholder="Rechercher un code NAF (tapez au moins 2 caractères)..."
+                  className={styles.input}
+                  style={{ paddingRight: '40px' }}
+                />
+                {nafAutocompleteLoading && (
+                  <div style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: '#6b7280'
+                  }}>
+                    <Search size={18} className={styles.spinning} />
+                  </div>
+                )}
+              </div>
 
-              <button
-                type="button"
-                onClick={() => setShowNafModal(true)}
-                className={styles.btnSecondary}
-                style={{ marginTop: '10px', width: '100%' }}
-              >
-                <Search size={16} />
-                Rechercher dans tous les codes NAF (732)
-              </button>
+              {/* Dropdown d'autocomplete */}
+              {showNafAutocomplete && nafAutocompleteSuggestions.length > 0 && (
+                <div className={styles.autocompleteDropdown}>
+                  <div className={styles.autocompleteHeader}>
+                    {nafAutocompleteSuggestions.length} résultat(s) trouvé(s)
+                  </div>
+                  {nafAutocompleteSuggestions.map(naf => (
+                    <div
+                      key={naf.code}
+                      className={`${styles.autocompleteItem} ${filters.codesNAF.includes(naf.code) ? styles.autocompleteItemDisabled : ''}`}
+                      onClick={() => {
+                        if (!filters.codesNAF.includes(naf.code)) {
+                          addNafCodeFromAutocomplete(naf.code);
+                        }
+                      }}
+                    >
+                      <div className={styles.autocompleteItemCode}>{naf.code}</div>
+                      <div className={styles.autocompleteItemLabel}>{naf.libelle}</div>
+                      <div className={styles.autocompleteItemDivision}>{naf.division}</div>
+                      {filters.codesNAF.includes(naf.code) && (
+                        <span className={styles.autocompleteItemBadge}>Déjà ajouté</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <p className={styles.nafHelp}>
-                💡 Sélectionnez un ou plusieurs codes NAF.
-                {filters.typeProduit && ' Les suggestions sont adaptées au produit choisi.'}
+                💡 Tapez au moins 2 caractères pour rechercher parmi les 732 codes NAF.
+                {filters.typeProduit && ' Vous pouvez rechercher par code ou par libellé.'}
               </p>
             </div>
           </div>
@@ -708,107 +755,6 @@ const Prospection = () => {
         </div>
       )}
 
-      {/* Modale de recherche complète des codes NAF */}
-      {showNafModal && (
-        <div className={styles.modalOverlay} onClick={() => setShowNafModal(false)}>
-          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>Rechercher parmi tous les codes NAF (732 codes)</h2>
-              <button
-                onClick={() => setShowNafModal(false)}
-                className={styles.modalClose}
-                aria-label="Fermer"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            <div className={styles.modalBody}>
-              {/* Barre de recherche */}
-              <div className={styles.searchBar}>
-                <Search size={20} />
-                <input
-                  type="text"
-                  placeholder="Rechercher par code ou libellé (ex: '47.11F' ou 'hypermarché')..."
-                  value={nafSearchQuery}
-                  onChange={(e) => {
-                    setNafSearchQuery(e.target.value);
-                    searchAllNafCodes(e.target.value);
-                  }}
-                  className={styles.searchInput}
-                  autoFocus
-                />
-                {nafSearchQuery && (
-                  <button
-                    onClick={() => {
-                      setNafSearchQuery('');
-                      searchAllNafCodes('');
-                    }}
-                    className={styles.clearSearch}
-                  >
-                    <X size={16} />
-                  </button>
-                )}
-              </div>
-
-              {/* Résultats de recherche */}
-              {nafSearchLoading ? (
-                <div className={styles.loadingContainer}>
-                  <Loader className={styles.spinner} size={32} />
-                  <p>Recherche en cours...</p>
-                </div>
-              ) : (
-                <div className={styles.nafResults}>
-                  {nafSearchResults.length > 0 ? (
-                    <>
-                      <p className={styles.resultsCount}>
-                        {nafSearchResults.length} code{nafSearchResults.length > 1 ? 's' : ''} trouvé{nafSearchResults.length > 1 ? 's' : ''}
-                      </p>
-                      <div className={styles.nafList}>
-                        {nafSearchResults.map((naf) => (
-                          <div
-                            key={naf.code}
-                            className={`${styles.nafItem} ${filters.codesNAF.includes(naf.code) ? styles.nafItemSelected : ''}`}
-                            onClick={() => addNafCodeFromModal(naf.code)}
-                          >
-                            <div className={styles.nafItemHeader}>
-                              <span className={styles.nafCode}>{naf.code}</span>
-                              {filters.codesNAF.includes(naf.code) && (
-                                <span className={styles.selectedBadge}>✓ Sélectionné</span>
-                              )}
-                            </div>
-                            <div className={styles.nafItemBody}>
-                              <p className={styles.nafLibelle}>{naf.libelle}</p>
-                              <p className={styles.nafDivision}>
-                                <small>{naf.division} • {naf.section}</small>
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <div className={styles.emptyResults}>
-                      <Search size={48} />
-                      <p>Aucun code NAF trouvé</p>
-                      <small>Essayez un autre terme de recherche</small>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className={styles.modalFooter}>
-              <button
-                onClick={() => setShowNafModal(false)}
-                className={styles.btnSecondary}
-              >
-                Fermer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
