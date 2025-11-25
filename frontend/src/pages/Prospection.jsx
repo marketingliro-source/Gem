@@ -77,7 +77,7 @@ const Prospection = () => {
       if (filters.typeProduit) {
         try {
           const response = await api.get(`/prospection/naf/relevant?typeProduit=${filters.typeProduit}`);
-          setNafSuggestions(response.data || []);
+          setNafSuggestions(response.data.codes || []);
         } catch (error) {
           console.error('Erreur chargement NAF:', error);
           // Fallback vers suggestions par défaut
