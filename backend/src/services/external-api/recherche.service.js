@@ -43,8 +43,22 @@ class RechercheEntreprisesService {
   async search(query, options = {}) {
     console.log('🔍🔍🔍 [RECHERCHE SERVICE] search() appelé avec:', { query, options });
 
-    if (!query || query.trim().length < 2) {
-      console.log('⚠️  [RECHERCHE SERVICE] Query trop courte ou vide, retour []');
+    // Validation query : minimum 3 caractères OU au moins un filtre
+    const hasFilters = options.codePostal || options.departement || options.region ||
+                      options.codeNAF || options.commune || options.minEmployes;
+
+    if (!query || query.trim().length === 0) {
+      console.log('⚠️  [RECHERCHE SERVICE] Query vide, retour []');
+      return [];
+    }
+
+    if (query.trim() === '*' && !hasFilters) {
+      console.log('⚠️  [RECHERCHE SERVICE] Wildcard "*" nécessite au moins un filtre, retour []');
+      return [];
+    }
+
+    if (query.trim().length < 3 && query.trim() !== '*') {
+      console.log('⚠️  [RECHERCHE SERVICE] Query trop courte (< 3 caractères), retour []');
       return [];
     }
 
