@@ -467,6 +467,42 @@
   color: white;
 }
 
+.limitSelector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+}
+
+.limitSelector label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.limitSelect {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.limitSelect:hover {
+  border-color: var(--accent-primary);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.limitSelect:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
 .pageNumberActive:hover {
   background: var(--accent-gradient);
 }

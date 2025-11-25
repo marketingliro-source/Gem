@@ -69,7 +69,7 @@ const Clients = () => {
 
   useEffect(() => {
     fetchClients();
-  }, [filterStatut, filterProduit, filterCodeNAF, filterCodePostal, pagination.page]);
+  }, [filterStatut, filterProduit, filterCodeNAF, filterCodePostal, pagination.page, pagination.limit]);
 
   const fetchClients = async () => {
     try {
@@ -589,6 +589,24 @@ const Clients = () => {
           >
             Suivant <ChevronRight size={18} />
           </button>
+
+          <div className={styles.limitSelector}>
+            <label>Afficher:</label>
+            <select
+              value={pagination.limit === pagination.total ? 'all' : pagination.limit}
+              onChange={(e) => {
+                const value = e.target.value;
+                const newLimit = value === 'all' ? pagination.total : parseInt(value);
+                setPagination(prev => ({ ...prev, limit: newLimit, page: 1 }));
+              }}
+              className={styles.limitSelect}
+            >
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="all">Tous</option>
+            </select>
+          </div>
         </div>
       )}
 
