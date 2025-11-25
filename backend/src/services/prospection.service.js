@@ -112,49 +112,12 @@ class ProspectionService {
     let entreprises = [];
 
     try {
-      // L'API Recherche Entreprises ne supporte PAS le wildcard "*"
-      // On doit utiliser une query textuelle réelle (min 3 caractères)
-      // Stratégie : extraire le premier mot significatif du libellé NAF
-      let queryText = 'entreprise'; // Fallback par défaut
+      // Quand on recherche par code NAF, utiliser une query très générique
+      // qui n'exclura presque aucune entreprise
+      // Les formes juridiques (SAS, SARL, etc.) sont présentes partout
+      let queryText = 'sas'; // Mot ultra-générique présent dans la plupart des entreprises
 
-      // Si on a un code NAF, essayer de trouver son libellé dans codes-naf.json
-      if (searchParams.codeNAF) {
-        try {
-          const codesNAF = require('../data/codes-naf.json');
-          let nafLibelle = null;
-
-          // Parcourir les sections pour trouver le code
-          for (const section of Object.values(codesNAF.sections || {})) {
-            for (const division of Object.values(section.divisions || {})) {
-              for (const code of division.codes || []) {
-                // Normaliser le code pour la comparaison (avec ou sans point)
-                const codeNormalized = code.code.replace('.', '');
-                const searchNormalized = searchParams.codeNAF.replace('.', '');
-
-                if (codeNormalized === searchNormalized) {
-                  nafLibelle = code.libelle;
-                  break;
-                }
-              }
-              if (nafLibelle) break;
-            }
-            if (nafLibelle) break;
-          }
-
-          // Extraire le premier mot significatif (min 4 caractères, ignorer articles)
-          if (nafLibelle) {
-            const words = nafLibelle.toLowerCase().split(/[\s',]+/).filter(w =>
-              w.length >= 4 && !['pour', 'dans', 'avec', 'autre', 'autres'].includes(w)
-            );
-            if (words.length > 0) {
-              queryText = words[0];
-              console.log(`🔍 Query extraite du libellé "${nafLibelle}": "${queryText}"`);
-            }
-          }
-        } catch (error) {
-          console.warn('⚠️  Erreur extraction libellé NAF:', error.message);
-        }
-      }
+      console.log(`🔍 Recherche avec query générique "${queryText}" + filtres NAF/géo`);
 
       // Rechercher avec l'API Recherche Entreprises
       console.log('🚀 [PROSPECTION] Appel rechercheService.search() avec query:', {
