@@ -390,7 +390,7 @@ router.post('/import/csv', authenticateToken, requireAdmin, async (req, res) => 
       const filePath = req.file.path;
 
       fs.createReadStream(filePath)
-        .pipe(csv())
+        .pipe(csv({ separator: ';' }))
         .on('data', (data) => results.push(data))
         .on('end', async () => {
           let imported = 0;
