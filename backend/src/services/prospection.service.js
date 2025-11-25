@@ -360,6 +360,251 @@ class ProspectionService {
   }
 
   /**
+   * Recherche paginée avec enrichissement lazy (optimal pour grandes listes)
+   * Phase 1: Récupère TOUS les résultats de l'API (rapide, données de base seulement)
+   * Phase 2: Applique filtres NAF/techniques sur tous les résultats
+   * Phase 3: Pagine les résultats filtrés
+   * Phase 4: Enrichit SEULEMENT la page demandée
+   *
+   * @param {Object} criteria - Critères de recherche
+   * @param {number} page - Numéro de page (commence à 1)
+   * @param {number} perPage - Nombre de résultats par page (défaut: 20)
+   * @returns {Promise<Object>} - { data: [...], pagination: { page, perPage, total, totalPages } }
+   */
+  async searchPaginated(criteria, page = 1, perPage = 20) {
+    console.log(`🔍📄 Prospection paginée: page ${page}, ${perPage} par page`);
+
+    const {
+      codeNAF,
+      codesNAF,
+      departement,
+      region,
+      codePostal,
+      commune,
+      produit,
+      scoreMinimum = null,
+      hauteurMin,
+      surfaceMin,
+      typesChauffage,
+      classesDPE
+    } = criteria;
+
+    if (!produit) {
+      throw new Error('Produit requis (destratification, pression, matelas_isolants)');
+    }
+
+    // === PHASE 1: RÉCUPÉRER TOUS LES RÉSULTATS (SANS ENRICHISSEMENT) ===
+    console.log('📊 Phase 1/4: Récupération de tous les résultats...');
+
+    const searchParams = {};
+    let expandedNafCodes = [];
+    const nafToUse = codesNAF && codesNAF.length > 0 ? codesNAF[0] : codeNAF;
+
+    if (nafToUse) {
+      console.log(`🔧 Code NAF fourni: ${nafToUse}`);
+      expandedNafCodes = nafService.expandPartialCode(nafToUse);
+      console.log(`✨ Expansion NAF: ${nafToUse} → [${expandedNafCodes.join(', ')}]`);
+    }
+
+    // Paramètres géographiques
+    if (region) {
+      searchParams.region = region;
+    } else if (departement) {
+      searchParams.departement = departement;
+    } else if (codePostal) {
+      searchParams.codePostal = codePostal;
+    }
+
+    if (commune) searchParams.commune = commune;
+
+    let allCompanies = [];
+
+    if (expandedNafCodes.length > 0) {
+      console.log('🔍 Recherche avec code(s) NAF complet(s)...');
+
+      for (const code of expandedNafCodes) {
+        console.log(`🚀 Recherche NAF ${code}...`);
+        const results = await rechercheService.search('*', {
+          ...searchParams,
+          codeNAF: code,
+          limit: 10000 // Grande limite pour récupérer tout
+        });
+        console.log(`📦 NAF ${code}: ${results.length} résultats`);
+        allCompanies.push(...results);
+      }
+
+      // Dédupliquer par SIRET
+      const siretMap = new Map();
+      allCompanies.forEach(c => siretMap.set(c.siret, c));
+      allCompanies = Array.from(siretMap.values());
+      console.log(`📦 Total après déduplication: ${allCompanies.length} entreprises`);
+
+    } else {
+      console.log('🔍 Recherche sans filtrage NAF (toutes activités)...');
+      allCompanies = await rechercheService.search('*', {
+        ...searchParams,
+        limit: 10000
+      });
+    }
+
+    console.log(`✅ ${allCompanies.length} entreprises récupérées`);
+
+    // === PHASE 2: FILTRAGE NAF/TECHNIQUE (SUR DONNÉES DE BASE) ===
+    console.log('🔧 Phase 2/4: Application des filtres NAF...');
+
+    let filteredCompanies = allCompanies;
+
+    // Filtrage NAF basique (sur activite_principale de l'API)
+    const nafCodes = codesNAF && codesNAF.length > 0 ? codesNAF : (codeNAF ? [codeNAF] : []);
+    if (nafCodes.length > 0) {
+      filteredCompanies = allCompanies.filter(c => {
+        const companyNAF = c.activite_principale || '';
+        if (!companyNAF) return false;
+
+        const companyNAFNormalized = companyNAF.replace(/\./g, '');
+        return nafCodes.some(code => {
+          const codeNormalized = code.replace(/\./g, '');
+          return companyNAFNormalized.startsWith(codeNormalized);
+        });
+      });
+
+      console.log(`✅ ${filteredCompanies.length} entreprises après filtre NAF (${allCompanies.length - filteredCompanies.length} rejetées)`);
+    }
+
+    // === PHASE 3: PAGINATION ===
+    console.log('📄 Phase 3/4: Pagination...');
+
+    const total = filteredCompanies.length;
+    const totalPages = Math.ceil(total / perPage);
+    const startIndex = (page - 1) * perPage;
+    const endIndex = startIndex + perPage;
+
+    const pageCompanies = filteredCompanies.slice(startIndex, endIndex);
+
+    console.log(`📄 Page ${page}/${totalPages}: ${pageCompanies.length} entreprises (total: ${total})`);
+
+    // === PHASE 4: ENRICHISSEMENT DE LA PAGE SEULEMENT ===
+    console.log(`🔄 Phase 4/4: Enrichissement de ${pageCompanies.length} entreprises...`);
+
+    const enrichedProspects = [];
+
+    for (let i = 0; i < pageCompanies.length; i++) {
+      const company = pageCompanies[i];
+      console.log(`\n📍 Enrichissement ${i+1}/${pageCompanies.length}: ${company.nom_complet} (${company.siret})`);
+
+      try {
+        const enriched = await this.enrichSingleProspect(company, produit);
+        if (enriched) {
+          enrichedProspects.push(enriched);
+        }
+      } catch (error) {
+        console.error(`❌ Erreur enrichissement ${company.siret}:`, error.message);
+      }
+    }
+
+    // === SCORING ===
+    console.log('🎯 Scoring des prospects...');
+    enrichedProspects.forEach(p => {
+      p.scoreProduiCible = scoringService.scoreForProduct(p, produit);
+    });
+
+    // === FILTRAGE PAR SCORE + CRITÈRES TECHNIQUES ===
+    let finalProspects = enrichedProspects;
+
+    // Filtrage par score minimum
+    if (scoreMinimum !== null) {
+      finalProspects = finalProspects.filter(p => p.scoreProduiCible >= scoreMinimum);
+      console.log(`✅ ${finalProspects.length} prospects avec score >= ${scoreMinimum}`);
+    }
+
+    // Filtrage par critères techniques détaillés (après enrichissement)
+    const hasTechnicalFilters = hauteurMin || surfaceMin ||
+                                (typesChauffage && typesChauffage.length > 0) ||
+                                (classesDPE && classesDPE.length > 0);
+
+    if (hasTechnicalFilters) {
+      console.log('🔧 Application des filtres techniques...');
+
+      finalProspects = finalProspects.filter(p => {
+        let match = true;
+
+        // Filtrage par code NAF enrichi (depuis SIRENE)
+        if (nafCodes.length > 0) {
+          const prospectNAF = p.sirene?.codeNAF;
+          if (prospectNAF) {
+            const prospectNAFNormalized = prospectNAF.replace(/\./g, '');
+            const nafMatch = nafCodes.some(code => {
+              const codeNormalized = code.replace(/\./g, '');
+              return prospectNAFNormalized.startsWith(codeNormalized);
+            });
+            if (!nafMatch) match = false;
+          } else {
+            match = false;
+          }
+        }
+
+        // Hauteur minimale
+        if (match && hauteurMin) {
+          const hauteur = p.bdtopo?.hauteur || p.bdnb?.hauteur || p.rnb?.hauteur;
+          if (!hauteur || parseFloat(hauteur) < parseFloat(hauteurMin)) {
+            match = false;
+          }
+        }
+
+        // Surface minimale
+        if (match && surfaceMin) {
+          const surface = p.bdnb?.surfacePlancher || p.rnb?.surface;
+          if (!surface || parseFloat(surface) < parseFloat(surfaceMin)) {
+            match = false;
+          }
+        }
+
+        // Type de chauffage
+        if (match && typesChauffage && typesChauffage.length > 0) {
+          const typeChauffage = p.bdnb?.typeChauffage?.toLowerCase() || '';
+          const energieChauffage = p.bdnb?.energieChauffage?.toLowerCase() || '';
+          const chauffageMatch = typesChauffage.some(type => {
+            type = type.toLowerCase();
+            return typeChauffage.includes(type) || energieChauffage.includes(type);
+          });
+          if (!chauffageMatch) match = false;
+        }
+
+        // Classe DPE
+        if (match && classesDPE && classesDPE.length > 0) {
+          const classeDPE = p.dpe?.classe;
+          if (!classeDPE || !classesDPE.includes(classeDPE.toUpperCase())) {
+            match = false;
+          }
+        }
+
+        return match;
+      });
+
+      console.log(`✅ ${finalProspects.length} prospects après filtres techniques`);
+    }
+
+    // === TRI PAR SCORE ===
+    finalProspects.sort((a, b) => b.scoreProduiCible - a.scoreProduiCible);
+
+    console.log('\n🎉 Prospection paginée terminée!');
+    console.log(`📊 Page ${page}: ${finalProspects.length} prospects qualifiés`);
+    console.log(`📊 Total disponible: ${total} entreprises`);
+
+    return {
+      data: finalProspects,
+      pagination: {
+        page,
+        perPage,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    };
+  }
+
+  /**
    * Enrichit un prospect avec toutes les sources de données
    * @param {Object} entreprise - Données entreprise de base
    * @param {string} produit - Type produit (pour optimiser les appels)

@@ -127,6 +127,90 @@ router.post('/search-enriched', authenticateToken, async (req, res) => {
 });
 
 /**
+ * @route   POST /api/prospection/search-paginated
+ * @desc    Recherche paginée avec enrichissement lazy (optimal pour grandes listes)
+ * @access  Private
+ */
+router.post('/search-paginated', authenticateToken, async (req, res) => {
+  try {
+    const {
+      codeNAF,
+      codesNAF,
+      departement,
+      region,
+      codePostal,
+      commune,
+      produit,
+      scoreMinimum,
+      hauteurMin,
+      surfaceMin,
+      typesChauffage,
+      classesDPE,
+      page = 1,
+      perPage = 20
+    } = req.body;
+
+    // Validation
+    if (!produit) {
+      return res.status(400).json({
+        error: 'Produit requis (destratification, pression, matelas_isolants)'
+      });
+    }
+
+    if (!codeNAF && !codesNAF && !departement && !region && !codePostal && !commune) {
+      return res.status(400).json({
+        error: 'Au moins un critère de recherche requis (NAF ou géographique)'
+      });
+    }
+
+    console.log('🔍📄 Recherche paginée API:', {
+      produit, codeNAF, codesNAF, departement, region, codePostal, commune,
+      page, perPage, hauteurMin, surfaceMin, typesChauffage, classesDPE
+    });
+
+    const result = await prospectionService.searchPaginated({
+      codeNAF,
+      codesNAF,
+      departement,
+      region,
+      codePostal,
+      commune,
+      produit,
+      scoreMinimum: scoreMinimum ? parseInt(scoreMinimum) : null,
+      hauteurMin: hauteurMin ? parseFloat(hauteurMin) : null,
+      surfaceMin: surfaceMin ? parseFloat(surfaceMin) : null,
+      typesChauffage,
+      classesDPE
+    }, parseInt(page) || 1, parseInt(perPage) || 20);
+
+    res.json({
+      success: true,
+      produit,
+      criteria: { codeNAF, codesNAF, departement, region, codePostal, commune },
+      ...result, // data + pagination
+      metadata: {
+        date: new Date().toISOString(),
+        scoreMinimum: scoreMinimum || 'auto',
+        filters: {
+          hauteurMin: hauteurMin || null,
+          surfaceMin: surfaceMin || null,
+          typesChauffage: typesChauffage || [],
+          classesDPE: classesDPE || []
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur recherche paginée:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la recherche paginée',
+      message: error.message
+    });
+  }
+});
+
+/**
  * @route   POST /api/prospection/export/csv
  * @desc    Exporte les résultats de prospection en CSV
  * @access  Private
