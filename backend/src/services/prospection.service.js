@@ -71,18 +71,12 @@ class ProspectionService {
 
     const searchParams = {};
 
-    // Gérer multi-NAF : utiliser le premier code pour la recherche (l'API n'accepte qu'un seul NAF)
+    // NE PAS passer le code NAF à l'API Recherche Entreprises
+    // L'API n'accepte QUE les codes NAF complets avec lettre (52.10A, 52.10B, etc.)
+    // On filtre par NAF APRÈS la recherche géographique (voir filtre multi-NAF ligne ~230)
     const nafToUse = codesNAF && codesNAF.length > 0 ? codesNAF[0] : codeNAF;
     if (nafToUse) {
-      // L'API attend le format AVEC le point : 47.11F (pas 4711F)
-      // Normaliser : s'assurer qu'il y a un point si le code fait 5+ caractères
-      let normalizedNAF = nafToUse;
-      if (nafToUse.length >= 5 && !nafToUse.includes('.')) {
-        // Format sans point (4711F) → avec point (47.11F)
-        normalizedNAF = nafToUse.substring(0, 2) + '.' + nafToUse.substring(2);
-      }
-      searchParams.codeNAF = normalizedNAF;
-      console.log(`🔧 Code NAF utilisé: ${nafToUse} → ${searchParams.codeNAF}`);
+      console.log(`🔧 Code NAF: ${nafToUse} - Filtrage post-recherche (l'API n'accepte que les codes complets)`);
     }
 
     if (departement) searchParams.departement = departement;
@@ -220,19 +214,25 @@ class ProspectionService {
     // === ÉTAPE 4.5: FILTRAGE PAR CRITÈRES TECHNIQUES ===
     let prospectsFiltres = prospectsQualifies;
 
-    if (hauteurMin || surfaceMin || (typesChauffage && typesChauffage.length > 0) || (classesDPE && classesDPE.length > 0) || (codesNAF && codesNAF.length > 1)) {
-      console.log('🔧 Étape 4.5/5: Filtrage par critères techniques...');
+    // Filtrage technique + NAF post-recherche (car l'API Recherche ne gère que les codes NAF complets)
+    const hasNAF = codeNAF || (codesNAF && codesNAF.length > 0);
+    if (hasNAF || hauteurMin || surfaceMin || (typesChauffage && typesChauffage.length > 0) || (classesDPE && classesDPE.length > 0)) {
+      console.log('🔧 Étape 4.5/5: Filtrage par critères techniques et NAF...');
 
       prospectsFiltres = prospectsQualifies.filter(p => {
         let match = true;
 
-        // Filtrage multi-NAF (si plus d'un code NAF spécifié)
-        if (codesNAF && codesNAF.length > 1) {
+        // Filtrage par code(s) NAF (car l'API Recherche ne gère que les codes complets)
+        const nafCodes = codesNAF && codesNAF.length > 0 ? codesNAF : (codeNAF ? [codeNAF] : []);
+        if (nafCodes.length > 0) {
           const prospectNAF = p.sirene?.codeNAF;
           if (prospectNAF) {
             // Vérifier si le code NAF du prospect commence par l'un des codes NAF recherchés
-            const nafMatch = codesNAF.some(code => prospectNAF.startsWith(code.replace('.', '')));
+            const nafMatch = nafCodes.some(code => prospectNAF.startsWith(code.replace('.', '')));
             if (!nafMatch) match = false;
+          } else {
+            // Pas de code NAF = exclure
+            match = false;
           }
         }
 
@@ -278,12 +278,13 @@ class ProspectionService {
         return match;
       });
 
-      console.log(`✅ ${prospectsFiltres.length} prospects après filtrage technique`);
+      console.log(`✅ ${prospectsFiltres.length} prospects après filtrage technique et NAF`);
+      const nafCodes = codesNAF && codesNAF.length > 0 ? codesNAF : (codeNAF ? [codeNAF] : []);
+      if (nafCodes.length > 0) console.log(`   - Code(s) NAF: ${nafCodes.join(', ')}`);
       if (hauteurMin) console.log(`   - Hauteur >= ${hauteurMin}m`);
       if (surfaceMin) console.log(`   - Surface >= ${surfaceMin}m²`);
       if (typesChauffage && typesChauffage.length > 0) console.log(`   - Types chauffage: ${typesChauffage.join(', ')}`);
       if (classesDPE && classesDPE.length > 0) console.log(`   - Classes DPE: ${classesDPE.join(', ')}`);
-      if (codesNAF && codesNAF.length > 1) console.log(`   - Codes NAF: ${codesNAF.join(', ')}`);
     }
 
     // === ÉTAPE 5: TRI PAR SCORE DÉCROISSANT ===
