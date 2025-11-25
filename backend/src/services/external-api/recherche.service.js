@@ -62,60 +62,80 @@ class RechercheEntreprisesService {
       return [];
     }
 
-    const params = {
-      q: query.trim(),
-      page: options.page || 1,
-      per_page: Math.min(options.limit || 20, 25), // Max 25 par page
-    };
+    const requestedLimit = options.limit || 100;
+    const perPage = 25; // Max de l'API
+    const maxPages = Math.ceil(requestedLimit / perPage);
 
-    // Filtres optionnels
-    if (options.codePostal) params.code_postal = options.codePostal;
-    if (options.departement) params.departement = options.departement;
-    if (options.region) params.region = options.region;
-    if (options.codeNAF) params.activite_principale = options.codeNAF;
-    if (options.minEmployes) params.min_matching_etablissements = options.minEmployes;
+    console.log(`📊 [RECHERCHE SERVICE] Pagination: ${requestedLimit} résultats demandés = ${maxPages} pages de ${perPage}`);
 
-    console.log('📦 [RECHERCHE SERVICE] Paramètres construits pour API:', JSON.stringify(params, null, 2));
-    console.log('🌐 [RECHERCHE SERVICE] URL complète:', this.baseURL + '?' + new URLSearchParams(params).toString());
+    let allResults = [];
+    let currentPage = 1;
 
-    const cacheKey = `recherche:${JSON.stringify(params)}`;
+    // Faire des appels paginés jusqu'à atteindre la limite
+    while (allResults.length < requestedLimit && currentPage <= maxPages) {
+      const params = {
+        q: query.trim(),
+        page: currentPage,
+        per_page: perPage,
+      };
 
-    return await cacheService.getOrSet(cacheKey, async () => {
-      await cacheService.waitForRateLimit('recherche');
+      // Filtres optionnels
+      if (options.codePostal) params.code_postal = options.codePostal;
+      if (options.departement) params.departement = options.departement;
+      if (options.region) params.region = options.region;
+      if (options.codeNAF) params.activite_principale = options.codeNAF;
+      if (options.minEmployes) params.min_matching_etablissements = options.minEmployes;
+
+      console.log(`📦 [RECHERCHE SERVICE] Page ${currentPage}/${maxPages} - Paramètres:`, JSON.stringify(params, null, 2));
+
+      const cacheKey = `recherche:${JSON.stringify(params)}`;
 
       try {
-        console.log('🚀 [RECHERCHE SERVICE] Envoi requête HTTP GET...');
-        const response = await this.client.get('', { params });
+        const pageResults = await cacheService.getOrSet(cacheKey, async () => {
+          await cacheService.waitForRateLimit('recherche');
 
-        console.log('✅ [RECHERCHE SERVICE] Réponse reçue - Status:', response.status);
-        console.log('📊 [RECHERCHE SERVICE] Données brutes response.data:', JSON.stringify(response.data, null, 2));
+          console.log(`🚀 [RECHERCHE SERVICE] Envoi requête page ${currentPage}...`);
+          const response = await this.client.get('', { params });
 
-        const results = response.data.results || [];
-        console.log(`📈 [RECHERCHE SERVICE] Nombre de résultats trouvés: ${results.length}`);
+          console.log(`✅ [RECHERCHE SERVICE] Page ${currentPage} reçue - Status:`, response.status);
 
-        if (results.length > 0) {
-          console.log('👉 [RECHERCHE SERVICE] Premier résultat brut:', JSON.stringify(results[0], null, 2));
+          const results = response.data.results || [];
+          console.log(`📈 [RECHERCHE SERVICE] Page ${currentPage}: ${results.length} résultats`);
+
+          return results.map(item => this.formatResult(item));
+
+        }, 1800); // Cache 30 minutes
+
+        if (pageResults.length === 0) {
+          console.log(`⚠️  [RECHERCHE SERVICE] Page ${currentPage} vide, arrêt pagination`);
+          break; // Plus de résultats disponibles
         }
 
-        const formatted = results.map(item => this.formatResult(item));
-        console.log(`✅ [RECHERCHE SERVICE] Résultats formatés: ${formatted.length} entreprises`);
+        allResults = allResults.concat(pageResults);
+        console.log(`📊 [RECHERCHE SERVICE] Total accumulé: ${allResults.length} résultats`);
 
-        if (formatted.length > 0) {
-          console.log('👉 [RECHERCHE SERVICE] Premier résultat formaté:', JSON.stringify(formatted[0], null, 2));
+        currentPage++;
+
+        // Petite pause entre les pages pour éviter le rate limiting
+        if (currentPage <= maxPages && allResults.length < requestedLimit) {
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
-
-        return formatted;
 
       } catch (error) {
-        console.error('❌❌❌ [RECHERCHE SERVICE] Erreur API Recherche Entreprises:', error.message);
+        console.error(`❌ [RECHERCHE SERVICE] Erreur page ${currentPage}:`, error.message);
         if (error.response) {
           console.error('📛 [RECHERCHE SERVICE] Status HTTP:', error.response.status);
           console.error('📛 [RECHERCHE SERVICE] Données erreur:', JSON.stringify(error.response.data, null, 2));
         }
-        console.error('📛 [RECHERCHE SERVICE] Stack trace:', error.stack);
-        return [];
+        // Continuer avec les résultats déjà obtenus
+        break;
       }
-    }, 1800); // Cache 30 minutes
+    }
+
+    console.log(`✅ [RECHERCHE SERVICE] Recherche terminée: ${allResults.length} résultats totaux sur ${currentPage - 1} pages`);
+
+    // Limiter au nombre exact demandé
+    return allResults.slice(0, requestedLimit);
   }
 
   /**
