@@ -231,80 +231,129 @@
   color: #6b7280;
 }
 
-.resultsGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 20px;
-}
-
-/* Carte prospect */
-.prospectCard {
+/* Tableau des résultats */
+.tableContainer {
   background: white;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
-  padding: 20px;
+  overflow: hidden;
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-  transition: all 0.3s ease;
-  border: 1px solid #f3f4f6;
 }
 
-.prospectCard:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  border-color: #059669;
+.table {
+  width: 100%;
+  border-collapse: collapse;
 }
 
-.cardHeader {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-  align-items: flex-start;
+.table thead {
+  background: rgba(5, 150, 105, 0.05);
 }
 
-.cardIcon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
-  border-radius: 10px;
+.table th {
+  padding: 16px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.table th:first-child {
+  width: 40px;
+}
+
+.table td {
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 14px;
+  color: #1f2937;
+}
+
+.table tbody tr {
+  transition: background 0.2s ease;
+}
+
+.table tbody tr:hover {
+  background: rgba(5, 150, 105, 0.04);
+}
+
+.table tbody tr.selected {
+  background: rgba(5, 150, 105, 0.08);
+  border-left: 3px solid #059669;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.companyInfo {
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: white;
+  gap: 8px;
+}
+
+.companyIcon {
+  color: #059669;
   flex-shrink: 0;
-}
-
-.cardTitle {
-  flex: 1;
-  min-width: 0;
-}
-
-.cardTitle h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0 0 4px 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .siret {
-  font-size: 12px;
-  color: #6b7280;
   font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: #6b7280;
 }
 
-.scoreBadge {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+.address {
+  max-width: 300px;
+}
+
+.addressInfo {
   display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: #6b7280;
+}
+
+.addressInfo svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.scoreBadgeTable {
+  display: inline-flex;
+  padding: 6px 12px;
+  border-radius: 12px;
   align-items: center;
   justify-content: center;
   color: white;
-  font-weight: 700;
-  font-size: 14px;
-  flex-shrink: 0;
+  font-weight: 600;
+  font-size: 13px;
+  min-width: 40px;
 }
+
+.importBtnTable {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.importBtnTable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3);
+}
+
+/* Anciens styles de cartes - supprimés car remplacés par le tableau */
 
 .cardBody {
   margin-bottom: 16px;

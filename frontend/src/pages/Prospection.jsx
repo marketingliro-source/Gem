@@ -815,78 +815,77 @@ const Prospection = () => {
             </div>
           </div>
 
-          <div className={styles.resultsGrid}>
-            {results.map((prospect, index) => (
-              <div
-                key={prospect.siret || index}
-                className={`${styles.prospectCard} ${selectedProspects.has(prospect.siret) ? styles.selected : ''}`}
-              >
-                <div className={styles.cardHeader}>
-                  <input
-                    type="checkbox"
-                    checked={selectedProspects.has(prospect.siret)}
-                    onChange={() => toggleSelectProspect(prospect.siret)}
-                    className={styles.prospectCheckbox}
-                  />
-                  <div className={styles.cardIcon}>
-                    <Building2 size={24} />
-                  </div>
-                  <div className={styles.cardTitle}>
-                    <h3>{prospect.denomination}</h3>
-                    <span className={styles.siret}>SIRET: {prospect.siret}</span>
-                  </div>
-                  <div
-                    className={styles.scoreBadge}
-                    style={{ backgroundColor: getScoreColor(prospect.scorePertinence) }}
+          <div className={styles.tableContainer}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>
+                    <input
+                      type="checkbox"
+                      checked={selectedProspects.size === results.length && results.length > 0}
+                      onChange={toggleSelectAll}
+                    />
+                  </th>
+                  <th>Société</th>
+                  <th>SIRET</th>
+                  <th>Adresse</th>
+                  <th>Code Postal</th>
+                  <th>Code NAF</th>
+                  <th>Téléphone</th>
+                  <th>Score</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.map((prospect, index) => (
+                  <tr
+                    key={prospect.siret || index}
+                    className={selectedProspects.has(prospect.siret) ? styles.selected : ''}
                   >
-                    {prospect.scorePertinence || 50}
-                  </div>
-                </div>
-
-                <div className={styles.cardBody}>
-                  <div className={styles.infoRow}>
-                    <MapPin size={16} />
-                    <span>
-                      {prospect.adresse?.adresseComplete || 'Adresse non disponible'}
-                    </span>
-                  </div>
-
-                  {prospect.codeNAF && (
-                    <div className={styles.infoRow}>
-                      <Building2 size={16} />
-                      <span>NAF: {prospect.codeNAF}</span>
-                    </div>
-                  )}
-
-                  {prospect.telephone && (
-                    <div className={styles.infoRow}>
-                      <Zap size={16} />
-                      <span className={styles.contact}>{prospect.telephone}</span>
-                    </div>
-                  )}
-
-                  {prospect.recommandations && prospect.recommandations.length > 0 && (
-                    <div className={styles.recommendations}>
-                      {prospect.recommandations.map((reco, i) => (
-                        <span key={i} className={styles.recoBadge}>
-                          {reco.produit}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className={styles.cardFooter}>
-                  <button
-                    onClick={() => handleImportAsClient(prospect)}
-                    className={styles.importBtn}
-                  >
-                    <Download size={16} />
-                    Importer comme client
-                  </button>
-                </div>
-              </div>
-            ))}
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedProspects.has(prospect.siret)}
+                        onChange={() => toggleSelectProspect(prospect.siret)}
+                      />
+                    </td>
+                    <td className={styles.name}>
+                      <div className={styles.companyInfo}>
+                        <Building2 size={16} className={styles.companyIcon} />
+                        <span>{prospect.denomination || 'Non renseigné'}</span>
+                      </div>
+                    </td>
+                    <td className={styles.siret}>{prospect.siret}</td>
+                    <td className={styles.address}>
+                      <div className={styles.addressInfo}>
+                        <MapPin size={14} />
+                        <span>{prospect.adresse?.adresseComplete || 'Non renseignée'}</span>
+                      </div>
+                    </td>
+                    <td>{prospect.adresse?.codePostal || '-'}</td>
+                    <td>{prospect.codeNAF || '-'}</td>
+                    <td>{prospect.telephone || '-'}</td>
+                    <td>
+                      <span
+                        className={styles.scoreBadgeTable}
+                        style={{ backgroundColor: getScoreColor(prospect.scorePertinence) }}
+                      >
+                        {Math.round(prospect.scorePertinence) || 0}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        onClick={() => handleImportAsClient(prospect)}
+                        className={styles.importBtnTable}
+                        title="Importer comme client"
+                      >
+                        <Download size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
