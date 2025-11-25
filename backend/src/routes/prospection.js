@@ -250,6 +250,67 @@ router.post('/export/excel', authenticateToken, async (req, res) => {
 });
 
 /**
+ * @route   GET /api/prospection/naf/search
+ * @desc    Recherche parmi tous les 732 codes NAF
+ * @access  Private
+ */
+router.get('/naf/search', authenticateToken, async (req, res) => {
+  try {
+    const { query, limit = 50 } = req.query;
+    const codesNAF = require('../data/codes-naf.json');
+
+    let results = [];
+
+    // Parcourir toutes les sections/divisions/codes
+    for (const [sectionCode, section] of Object.entries(codesNAF.sections || {})) {
+      for (const [divisionCode, division] of Object.entries(section.divisions || {})) {
+        for (const code of division.codes || []) {
+          // Formater le code avec un point (ex: 4711F → 47.11F)
+          const formattedCode = code.code.length >= 5 && !code.code.includes('.')
+            ? code.code.substring(0, 2) + '.' + code.code.substring(2)
+            : code.code;
+
+          results.push({
+            code: formattedCode,
+            codeOriginal: code.code,
+            libelle: code.libelle,
+            division: division.libelle,
+            section: section.libelle,
+            sectionCode: sectionCode
+          });
+        }
+      }
+    }
+
+    // Filtrer par query si fournie
+    if (query && query.trim().length > 0) {
+      const searchTerm = query.trim().toLowerCase();
+      results = results.filter(item =>
+        item.code.toLowerCase().includes(searchTerm) ||
+        item.libelle.toLowerCase().includes(searchTerm) ||
+        item.division.toLowerCase().includes(searchTerm)
+      );
+    }
+
+    // Limiter les résultats
+    results = results.slice(0, parseInt(limit));
+
+    res.json({
+      total: results.length,
+      query: query || null,
+      codes: results
+    });
+
+  } catch (error) {
+    console.error('Erreur recherche NAF:', error);
+    res.status(500).json({
+      error: 'Erreur lors de la recherche des codes NAF',
+      message: error.message
+    });
+  }
+});
+
+/**
  * @route   GET /api/prospection/naf/relevant
  * @desc    Récupère les codes NAF pertinents pour un type de produit
  * @access  Private
