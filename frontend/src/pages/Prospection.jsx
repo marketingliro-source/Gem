@@ -262,12 +262,19 @@ const Prospection = () => {
 
     setLoading(true);
     try {
-      // Préparer le payload avec pagination
+      // Préparer le payload avec seulement les champs nécessaires
       const searchPayload = {
-        ...filters,
-        // Si un seul NAF, envoyer aussi codeNAF pour compatibilité
+        codesNAF: filters.codesNAF,
         codeNAF: filters.codesNAF.length === 1 ? filters.codesNAF[0] : undefined,
+        departement: filters.departement || undefined,
+        region: filters.region || undefined,
+        codePostal: filters.codePostal || undefined,
         produit: filters.typeProduit,
+        scoreMinimum: filters.scoreMinimum || undefined,
+        hauteurMin: filters.hauteurMin ? parseFloat(filters.hauteurMin) : undefined,
+        surfaceMin: filters.surfaceMin ? parseFloat(filters.surfaceMin) : undefined,
+        typesChauffage: filters.typesChauffage.length > 0 ? filters.typesChauffage : undefined,
+        classesDPE: filters.classesDPE.length > 0 ? filters.classesDPE : undefined,
         page: pageNumber,
         perPage: pagination.perPage
       };
