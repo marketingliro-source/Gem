@@ -7,6 +7,7 @@ const bdtopoService = require('./external-api/bdtopo.service');
 const georisquesService = require('./external-api/georisques.service');
 const dpeService = require('./external-api/dpe.service');
 const scoringService = require('./scoring.service');
+const nafService = require('./naf.service');
 const RegionsUtils = require('../utils/regions');
 
 /**
@@ -71,12 +72,48 @@ class ProspectionService {
 
     const searchParams = {};
 
-    // NE PAS passer le code NAF à l'API Recherche Entreprises
-    // L'API n'accepte QUE les codes NAF complets avec lettre (52.10A, 52.10B, etc.)
-    // On filtre par NAF APRÈS la recherche géographique (voir filtre multi-NAF ligne ~230)
+    // === SÉLECTION DES CODES NAF ===
+    // L'API Recherche Entreprises n'accepte QUE les codes NAF complets avec lettre (52.10A, 52.10B, etc.)
+    let expandedNafCodes = [];
     const nafToUse = codesNAF && codesNAF.length > 0 ? codesNAF[0] : codeNAF;
+
     if (nafToUse) {
-      console.log(`🔧 Code NAF: ${nafToUse} - Filtrage post-recherche (l'API n'accepte que les codes complets)`);
+      // Un code NAF spécifique est fourni - l'expander s'il est partiel
+      console.log(`🔧 Code NAF fourni: ${nafToUse}`);
+
+      // Expandre le code NAF partiel en codes complets
+      expandedNafCodes = nafService.expandPartialCode(nafToUse);
+
+      if (expandedNafCodes.length > 0) {
+        console.log(`✨ Expansion NAF: ${nafToUse} → [${expandedNafCodes.join(', ')}]`);
+      } else {
+        // Code non trouvé dans la base - probablement un code complet déjà
+        console.log(`ℹ️  Code NAF non trouvé dans la base, utilisation directe: ${nafToUse}`);
+        // Formatter le code: "4120A" → "41.20A"
+        const formatted = nafToUse.length === 5 && !nafToUse.includes('.')
+          ? `${nafToUse.slice(0, 2)}.${nafToUse.slice(2)}`
+          : nafToUse;
+        expandedNafCodes = [formatted];
+      }
+    } else {
+      // Aucun code NAF fourni - utiliser les codes depuis categories_cee pour le produit
+      console.log(`🔧 Aucun code NAF fourni, utilisation des codes du produit: ${produit}`);
+
+      const productCodes = nafService.getCodesForProduct(produit);
+      if (productCodes && productCodes.length > 0) {
+        // Formatter les codes: "4120A" → "41.20A", "4322B" → "43.22B"
+        expandedNafCodes = productCodes.map(c => {
+          const code = c.code;
+          // Si le code a 5 caractères sans point (4120A), ajouter le point (41.20A)
+          if (code.length === 5 && !code.includes('.')) {
+            return `${code.slice(0, 2)}.${code.slice(2)}`;
+          }
+          return code;
+        });
+        console.log(`✨ Codes NAF pour ${produit}: [${expandedNafCodes.join(', ')}]`);
+      } else {
+        console.warn(`⚠️  Aucun code NAF trouvé pour le produit: ${produit}`);
+      }
     }
 
     if (departement) searchParams.departement = departement;
@@ -97,43 +134,58 @@ class ProspectionService {
     if (codePostal) searchParams.codePostal = codePostal;
     if (commune) searchParams.commune = commune;
 
-    if (codesNAF && codesNAF.length > 1) {
-      console.log(`⚠️  Multi-NAF détecté: ${codesNAF.length} codes. Recherche avec le premier (${nafToUse}), filtrage post-enrichissement pour les autres.`);
-    }
-
-    console.log('🔧 [PROSPECTION] Paramètres construits pour rechercheService.search():', searchParams);
+    console.log('🔧 [PROSPECTION] Paramètres géographiques:', searchParams);
 
     let entreprises = [];
 
     try {
-      // Quand on recherche par code NAF, utiliser une query très générique
-      // qui n'exclura presque aucune entreprise
-      // Les formes juridiques (SAS, SARL, etc.) sont présentes partout
-      let queryText = 'sas'; // Mot ultra-générique présent dans la plupart des entreprises
+      // === RECHERCHE AVEC CODES NAF COMPLETS ===
+      // Si on a des codes NAF expandés, on fait une recherche pour chaque code et on fusionne
+      if (expandedNafCodes.length > 0) {
+        console.log(`🔍 Recherche avec ${expandedNafCodes.length} code(s) NAF complet(s)...`);
 
-      console.log(`🔍 Recherche avec query générique "${queryText}" + filtres NAF/géo`);
+        const allResults = [];
+        const siretsSeen = new Set(); // Pour éviter les doublons
 
-      // Rechercher avec l'API Recherche Entreprises
-      console.log('🚀 [PROSPECTION] Appel rechercheService.search() avec query:', {
-        query: queryText,
-        ...searchParams,
-        limit: limit
-      });
+        for (const nafCode of expandedNafCodes) {
+          console.log(`🚀 [PROSPECTION] Recherche NAF ${nafCode}...`);
 
-      const results = await rechercheService.search(queryText, {
-        ...searchParams,
-        limit: limit
-      });
+          const results = await rechercheService.search('*', {
+            ...searchParams,
+            codeNAF: nafCode,
+            limit: limit || 100
+          });
 
-      console.log(`📦 [PROSPECTION] Résultats reçus de rechercheService.search(): ${results ? results.length : 'null'} entreprises`);
+          console.log(`📦 NAF ${nafCode}: ${results ? results.length : 0} résultats`);
 
-      if (results && results.length > 0) {
-        console.log('👉 [PROSPECTION] Premier résultat:', JSON.stringify(results[0], null, 2));
+          // Ajouter les résultats en évitant les doublons
+          if (results && results.length > 0) {
+            for (const result of results) {
+              if (!siretsSeen.has(result.siret)) {
+                siretsSeen.add(result.siret);
+                allResults.push(result);
+              }
+            }
+          }
+        }
+
+        console.log(`📦 [PROSPECTION] Total après fusion: ${allResults.length} entreprises uniques`);
+        entreprises = limit ? allResults.slice(0, limit) : allResults;
+
+      } else {
+        // Pas de code NAF, recherche géographique uniquement
+        console.log('🔍 Recherche sans filtre NAF (géographie uniquement)');
+
+        const results = await rechercheService.search('*', {
+          ...searchParams,
+          limit: limit || 100
+        });
+
+        console.log(`📦 [PROSPECTION] ${results ? results.length : 0} entreprises`);
+        entreprises = limit ? results.slice(0, limit) : results;
       }
 
-      // Si limit est null (tous les résultats), ne pas limiter
-      entreprises = limit ? results.slice(0, limit) : results;
-      console.log(`✅✅✅ ${entreprises.length} entreprises trouvées APRÈS slice`);
+      console.log(`✅✅✅ ${entreprises.length} entreprises trouvées`);
 
     } catch (error) {
       console.error('❌❌❌ Erreur recherche entreprises:', error.message);

@@ -205,6 +205,42 @@ class NAFService {
   }
 
   /**
+   * Expande un code NAF partiel en codes complets
+   * Ex: "52.10" → ["52.10A", "52.10B"]
+   * Ex: "86.10" → ["86.10Z"]
+   * @param {string} partialCode - Code NAF partiel (ex: "52.10", "8610")
+   * @returns {Array<string>} - Liste des codes NAF complets
+   */
+  expandPartialCode(partialCode) {
+    if (!partialCode) {
+      return [];
+    }
+
+    // Nettoyer le code : enlever les points et espaces
+    const cleanCode = partialCode.replace(/[.\s]/g, '');
+
+    // Si le code a déjà une lettre (code complet), le retourner tel quel
+    if (/[A-Z]$/.test(cleanCode)) {
+      // Reformater avec le point si nécessaire (ex: "5210A" → "52.10A")
+      if (cleanCode.length === 5) {
+        return [`${cleanCode.slice(0, 2)}.${cleanCode.slice(2)}`];
+      }
+      return [cleanCode];
+    }
+
+    // Obtenir tous les codes et filtrer ceux qui commencent par le code partiel
+    const allCodes = this.getAllCodes();
+    const matchingCodes = allCodes
+      .filter(code => {
+        const codeClean = code.code.replace(/[.\s]/g, '');
+        return codeClean.startsWith(cleanCode);
+      })
+      .map(code => code.code);
+
+    return matchingCodes;
+  }
+
+  /**
    * Exporte les codes NAF pour le frontend (format optimisé)
    * @param {Object} filters - Filtres optionnels
    * @returns {Array}

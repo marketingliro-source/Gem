@@ -73,8 +73,12 @@ class RechercheEntreprisesService {
 
     // Faire des appels paginés jusqu'à atteindre la limite
     while (allResults.length < requestedLimit && currentPage <= maxPages) {
+      // IMPORTANT: L'API n'accepte PAS le wildcard "*" avec des filtres NAF/région
+      // Utiliser une string vide "" à la place pour obtenir tous les résultats filtrés
+      const queryToSend = query.trim() === '*' ? '' : query.trim();
+
       const params = {
-        q: query.trim(),
+        q: queryToSend,
         page: currentPage,
         per_page: perPage,
       };
@@ -83,9 +87,9 @@ class RechercheEntreprisesService {
       if (options.codePostal) params.code_postal = options.codePostal;
       if (options.departement) params.departement = options.departement;
       if (options.region) params.region = options.region;
-      // NE PAS envoyer le code NAF à l'API - elle n'accepte QUE les codes complets avec lettre (52.10A, 52.10B)
-      // Le filtrage NAF se fait post-recherche dans prospection.service.js
-      // if (options.codeNAF) params.activite_principale = options.codeNAF;
+      // L'API accepte UNIQUEMENT les codes NAF complets avec lettre (52.10A, 52.10B, 86.10Z, etc.)
+      // Les codes partiels (52.10, 86.10) doivent être expandés AVANT d'appeler cette fonction
+      if (options.codeNAF) params.activite_principale = options.codeNAF;
       if (options.minEmployes) params.min_matching_etablissements = options.minEmployes;
 
       console.log(`📦 [RECHERCHE SERVICE] Page ${currentPage}/${maxPages} - Paramètres:`, JSON.stringify(params, null, 2));
