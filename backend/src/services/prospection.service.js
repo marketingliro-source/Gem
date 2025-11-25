@@ -106,35 +106,46 @@ class ProspectionService {
     try {
       // L'API Recherche Entreprises ne supporte PAS le wildcard "*"
       // On doit utiliser une query textuelle réelle (min 3 caractères)
-      // Stratégie : utiliser un terme générique basé sur le contexte
+      // Stratégie : extraire le premier mot significatif du libellé NAF
       let queryText = 'entreprise'; // Fallback par défaut
 
-      // Si on a un code NAF, utiliser le premier mot du libellé comme query
-      const NAF_TO_KEYWORD = {
-        '47.11F': 'hypermarche',
-        '47.11D': 'supermarche',
-        '52.10A': 'entrepot',
-        '52.10B': 'entrepot',
-        '56.10A': 'restaurant',
-        '56.10C': 'restaurant',
-        '56.29A': 'restauration',
-        '93.11Z': 'sport',
-        '10.11Z': 'viande',
-        '10.71A': 'boulangerie',
-        '86.10Z': 'hopital',
-        '87.10A': 'ehpad',
-        '55.10Z': 'hotel',
-        '85.31Z': 'college',
-        '85.32Z': 'lycee',
-        '24.10Z': 'acier',
-        '24.51Z': 'fonderie',
-        '20.11Z': 'chimie',
-        '10.51A': 'laiterie'
-      };
+      // Si on a un code NAF, essayer de trouver son libellé dans codes-naf.json
+      if (searchParams.codeNAF) {
+        try {
+          const codesNAF = require('../data/codes-naf.json');
+          let nafLibelle = null;
 
-      if (searchParams.codeNAF && NAF_TO_KEYWORD[searchParams.codeNAF]) {
-        queryText = NAF_TO_KEYWORD[searchParams.codeNAF];
-        console.log(`🔍 Utilisation query basée sur NAF: "${queryText}"`);
+          // Parcourir les sections pour trouver le code
+          for (const section of Object.values(codesNAF.sections || {})) {
+            for (const division of Object.values(section.divisions || {})) {
+              for (const code of division.codes || []) {
+                // Normaliser le code pour la comparaison (avec ou sans point)
+                const codeNormalized = code.code.replace('.', '');
+                const searchNormalized = searchParams.codeNAF.replace('.', '');
+
+                if (codeNormalized === searchNormalized) {
+                  nafLibelle = code.libelle;
+                  break;
+                }
+              }
+              if (nafLibelle) break;
+            }
+            if (nafLibelle) break;
+          }
+
+          // Extraire le premier mot significatif (min 4 caractères, ignorer articles)
+          if (nafLibelle) {
+            const words = nafLibelle.toLowerCase().split(/[\s',]+/).filter(w =>
+              w.length >= 4 && !['pour', 'dans', 'avec', 'autre', 'autres'].includes(w)
+            );
+            if (words.length > 0) {
+              queryText = words[0];
+              console.log(`🔍 Query extraite du libellé "${nafLibelle}": "${queryText}"`);
+            }
+          }
+        } catch (error) {
+          console.warn('⚠️  Erreur extraction libellé NAF:', error.message);
+        }
       }
 
       // Rechercher avec l'API Recherche Entreprises
