@@ -83,7 +83,9 @@ class RechercheEntreprisesService {
       if (options.codePostal) params.code_postal = options.codePostal;
       if (options.departement) params.departement = options.departement;
       if (options.region) params.region = options.region;
-      if (options.codeNAF) params.activite_principale = options.codeNAF;
+      // NE PAS envoyer le code NAF à l'API - elle n'accepte QUE les codes complets avec lettre (52.10A, 52.10B)
+      // Le filtrage NAF se fait post-recherche dans prospection.service.js
+      // if (options.codeNAF) params.activite_principale = options.codeNAF;
       if (options.minEmployes) params.min_matching_etablissements = options.minEmployes;
 
       console.log(`📦 [RECHERCHE SERVICE] Page ${currentPage}/${maxPages} - Paramètres:`, JSON.stringify(params, null, 2));
