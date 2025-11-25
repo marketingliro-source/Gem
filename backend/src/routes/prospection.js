@@ -30,6 +30,10 @@ router.post('/search', authenticateToken, async (req, res) => {
       });
     }
 
+    // Gestion de la limite: 0 = tous les résultats, sinon valeur fournie ou 20 par défaut
+    const parsedLimit = parseInt(limit);
+    const finalLimit = parsedLimit === 0 ? null : (parsedLimit || 20);
+
     const results = await prospectionService.search({
       codeNAF,
       codesNAF,
@@ -39,7 +43,7 @@ router.post('/search', authenticateToken, async (req, res) => {
       typeProduit,
       critereTechnique,
       enrichPhone: enrichPhone === true,
-      limit: parseInt(limit) || 100
+      limit: finalLimit
     });
 
     res.json(results);

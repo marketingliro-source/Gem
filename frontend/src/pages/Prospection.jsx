@@ -23,7 +23,7 @@ const Prospection = () => {
     codePostal: '',
     typeProduit: '',
     enrichPhone: false,
-    limit: 100,
+    limit: 20, // 20 par défaut
     // Critères techniques
     hauteurMin: '',
     surfaceMin: '',
@@ -637,6 +637,20 @@ const Prospection = () => {
             />
             <span>Enrichir avec numéros de téléphone (limite: 50 premiers)</span>
           </label>
+
+          <div className={styles.limitSelector}>
+            <label>Nombre de résultats:</label>
+            <select
+              value={filters.limit}
+              onChange={(e) => handleFilterChange('limit', parseInt(e.target.value) || 0)}
+              className={styles.select}
+            >
+              <option value="20">20 résultats</option>
+              <option value="50">50 résultats</option>
+              <option value="100">100 résultats</option>
+              <option value="0">Tous les résultats</option>
+            </select>
+          </div>
         </div>
 
         {/* Boutons d'action */}

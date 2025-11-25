@@ -7,6 +7,7 @@ const bdtopoService = require('./external-api/bdtopo.service');
 const georisquesService = require('./external-api/georisques.service');
 const dpeService = require('./external-api/dpe.service');
 const scoringService = require('./scoring.service');
+const RegionsUtils = require('../utils/regions');
 
 /**
  * Service de prospection enrichie multi-sources
@@ -87,9 +88,16 @@ class ProspectionService {
     if (departement) searchParams.departement = departement;
 
     // L'API attend les CODES région (11, 84, etc.), pas les noms
+    // Conversion automatique nom → code si nécessaire
     if (region) {
-      searchParams.region = region;
-      console.log(`🔧 Région utilisée: ${region}`);
+      const codeRegion = RegionsUtils.nomVersCode(region);
+      if (codeRegion) {
+        searchParams.region = codeRegion;
+        const nomRegion = RegionsUtils.codeVersNom(codeRegion);
+        console.log(`🔧 Région: "${region}" → code ${codeRegion} (${nomRegion})`);
+      } else {
+        console.warn(`⚠️  Code région invalide: "${region}"`);
+      }
     }
 
     if (codePostal) searchParams.codePostal = codePostal;
@@ -166,7 +174,8 @@ class ProspectionService {
         console.log('👉 [PROSPECTION] Premier résultat:', JSON.stringify(results[0], null, 2));
       }
 
-      entreprises = results.slice(0, limit);
+      // Si limit est null (tous les résultats), ne pas limiter
+      entreprises = limit ? results.slice(0, limit) : results;
       console.log(`✅✅✅ ${entreprises.length} entreprises trouvées APRÈS slice`);
 
     } catch (error) {
@@ -183,7 +192,9 @@ class ProspectionService {
     // === ÉTAPE 2: ENRICHISSEMENT MULTI-SOURCES ===
     console.log('🔄 Étape 2/5: Enrichissement multi-sources...');
 
-    const enrichLimit = enrichAll ? limit : Math.min(this.defaultEnrichLimit, limit);
+    // Si limit est null, utiliser la longueur totale pour enrichir
+    const actualLimit = limit || entreprises.length;
+    const enrichLimit = enrichAll ? actualLimit : Math.min(this.defaultEnrichLimit, actualLimit);
     const entreprisesAEnrichir = entreprises.slice(0, enrichLimit);
 
     const enrichedProspects = [];
@@ -439,57 +450,74 @@ class ProspectionService {
         console.warn('  ⚠️  BDNB échoué:', error.message);
       }
 
-      // 5. BD TOPO (hauteur bâtiment précise) - CRITIQUE pour destratification
+      // 5, 6, 7: Appels parallèles (BD TOPO + Géorisques + DPE) - Gain de performance ~30%
+      console.log('  🚀 Appels parallèles: BD TOPO + Géorisques + DPE...');
+
+      const parallelCalls = [];
+
+      // BD TOPO (hauteur bâtiment précise) - CRITIQUE pour destratification
       if (produit === 'destratification') {
         console.log('  📏 BD TOPO (hauteur)...');
-        try {
-          const bdtopoData = await bdtopoService.getNearestBuildingWithHeight(latitude, longitude, 100);
-
-          if (bdtopoData) {
-            enrichedData.bdtopo = bdtopoData;
-            enrichedData.sources.push('bdtopo');
-            console.log(`    ✓ Hauteur: ${bdtopoData.hauteur || bdtopoData.hauteurEstimee}m`);
-          }
-        } catch (error) {
-          console.warn('  ⚠️  BD TOPO échoué:', error.message);
-        }
+        parallelCalls.push(
+          bdtopoService.getNearestBuildingWithHeight(latitude, longitude, 100)
+            .then(bdtopoData => {
+              if (bdtopoData) {
+                enrichedData.bdtopo = bdtopoData;
+                enrichedData.sources.push('bdtopo');
+                console.log(`    ✓ Hauteur: ${bdtopoData.hauteur || bdtopoData.hauteurEstimee}m`);
+              }
+            })
+            .catch(error => {
+              console.warn('  ⚠️  BD TOPO échoué:', error.message);
+            })
+        );
       }
 
-      // 6. Géorisques ICPE (sites industriels) - CRITIQUE pour matelas isolants
+      // Géorisques ICPE (sites industriels) - CRITIQUE pour matelas isolants
       if (produit === 'matelas_isolants') {
         console.log('  🏭 Géorisques (ICPE)...');
-        try {
-          const georisquesData = await georisquesService.searchByCoordinates(latitude, longitude, 500);
-
-          if (georisquesData && georisquesData.length > 0) {
-            enrichedData.georisques = georisquesData;
-            enrichedData.sources.push('georisques');
-            console.log(`    ✓ ${georisquesData.length} installation(s) ICPE trouvée(s)`);
-          }
-        } catch (error) {
-          console.warn('  ⚠️  Géorisques échoué:', error.message);
-        }
+        parallelCalls.push(
+          georisquesService.searchByCoordinates(latitude, longitude, 500)
+            .then(georisquesData => {
+              if (georisquesData && georisquesData.length > 0) {
+                enrichedData.georisques = georisquesData;
+                enrichedData.sources.push('georisques');
+                console.log(`    ✓ ${georisquesData.length} installation(s) ICPE trouvée(s)`);
+              }
+            })
+            .catch(error => {
+              console.warn('  ⚠️  Géorisques échoué:', error.message);
+            })
+        );
       }
 
-      // 7. DPE (performance énergétique)
+      // DPE (performance énergétique) - Toujours appelé
       console.log('  ⚡ DPE (performance)...');
-      try {
-        // Essayer par SIRET d'abord (tertiaire)
-        let dpeData = await dpeService.searchBySiret(siret);
+      parallelCalls.push(
+        (async () => {
+          try {
+            // Essayer par SIRET d'abord (tertiaire)
+            let dpeData = await dpeService.searchBySiret(siret);
 
-        // Fallback: par adresse
-        if (!dpeData || dpeData.length === 0) {
-          dpeData = await dpeService.searchByAddress(adresse, 'tertiaire');
-        }
+            // Fallback: par adresse
+            if (!dpeData || dpeData.length === 0) {
+              dpeData = await dpeService.searchByAddress(adresse, 'tertiaire');
+            }
 
-        if (dpeData && dpeData.length > 0) {
-          enrichedData.dpe = dpeData;
-          enrichedData.sources.push('dpe');
-          console.log(`    ✓ ${dpeData.length} DPE trouvé(s) - Étiquette: ${dpeData[0].etiquetteDPE || 'N/A'}`);
-        }
-      } catch (error) {
-        console.warn('  ⚠️  DPE échoué:', error.message);
-      }
+            if (dpeData && dpeData.length > 0) {
+              enrichedData.dpe = dpeData;
+              enrichedData.sources.push('dpe');
+              console.log(`    ✓ ${dpeData.length} DPE trouvé(s) - Étiquette: ${dpeData[0].etiquetteDPE || 'N/A'}`);
+            }
+          } catch (error) {
+            console.warn('  ⚠️  DPE échoué:', error.message);
+          }
+        })()
+      );
+
+      // Exécuter tous les appels en parallèle
+      await Promise.allSettled(parallelCalls);
+      console.log('  ✅ Appels parallèles terminés');
 
       console.log(`  ✅ Enrichissement terminé - ${enrichedData.sources.length} sources`);
 

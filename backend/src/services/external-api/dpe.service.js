@@ -11,11 +11,13 @@ class DPEService {
   constructor() {
     this.baseURL = process.env.DPE_API_URL || 'https://data.ademe.fr/data-fair/api/v1/datasets';
 
-    // IDs des datasets DPE (MISE À JOUR 2024/2025)
+    // IDs des datasets DPE (MISE À JOUR 2025 - nouveaux IDs simplifiés)
+    // https://data.ademe.fr/datasets/dpe01tertiaire
+    // https://data.ademe.fr/datasets/dpe03existant
     this.datasets = {
-      tertiaire: process.env.DPE_DATASET_TERTIAIRE || 'j9ol0fwjqckyf49vr29nknbu',  // DPE tertiaire
-      existant: process.env.DPE_DATASET_LOGEMENTS || 'meg-83tjwtg8dyz4vv7h1dqe',   // DPE logements existants
-      neuf: process.env.DPE_DATASET_NEUFS || 'g3cgx7jb3cmys5voxz1mrm22'            // DPE logements neufs
+      tertiaire: process.env.DPE_DATASET_TERTIAIRE || 'dpe01tertiaire',  // DPE tertiaire (depuis juillet 2021)
+      existant: process.env.DPE_DATASET_LOGEMENTS || 'dpe03existant',     // DPE logements existants (depuis juillet 2021)
+      neuf: process.env.DPE_DATASET_NEUFS || 'dpe02neufs'                 // DPE logements neufs (depuis juillet 2021)
     };
 
     this.client = axios.create({
