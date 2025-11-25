@@ -17,8 +17,8 @@ const RegionsUtils = require('../utils/regions');
 class ProspectionService {
   constructor() {
     // Limite par défaut de résultats enrichis (coûteux en API calls)
-    this.defaultLimit = 20;
-    this.defaultEnrichLimit = 10; // Enrichir seulement top 10 par défaut
+    this.defaultLimit = 100;
+    this.defaultEnrichLimit = 1000; // Enrichir jusqu'à 1000 résultats max
   }
 
   /**
