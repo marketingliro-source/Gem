@@ -1,5 +1,5 @@
 import React from 'react';
-import logoImg from '../assets/logo-moustache.jpg';
+import logoImg from '../assets/logo-moustache.png';
 
 const Logo = ({ size = 40, collapsed = false }) => {
   return (
