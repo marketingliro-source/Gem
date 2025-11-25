@@ -32,9 +32,10 @@ const Prospection = () => {
     { value: 'matelas_isolants', label: 'Matelas Isolants' }
   ];
 
-  // Codes régions INSEE officiels (depuis 2016)
+  // Codes régions INSEE officiels (depuis 2016) - Métropole + Outre-mer
   const REGIONS = [
     { value: '', label: 'Toutes les régions' },
+    // Métropole
     { value: '11', label: 'Île-de-France' },
     { value: '24', label: 'Centre-Val de Loire' },
     { value: '27', label: 'Bourgogne-Franche-Comté' },
@@ -47,7 +48,13 @@ const Prospection = () => {
     { value: '76', label: 'Occitanie' },
     { value: '84', label: 'Auvergne-Rhône-Alpes' },
     { value: '93', label: 'Provence-Alpes-Côte d\'Azur' },
-    { value: '94', label: 'Corse' }
+    { value: '94', label: 'Corse' },
+    // Outre-mer (DOM-TOM)
+    { value: '01', label: 'Guadeloupe' },
+    { value: '02', label: 'Martinique' },
+    { value: '03', label: 'Guyane' },
+    { value: '04', label: 'La Réunion' },
+    { value: '06', label: 'Mayotte' }
   ];
 
   const TYPES_CHAUFFAGE = [
