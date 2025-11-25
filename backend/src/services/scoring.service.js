@@ -517,6 +517,33 @@ class ScoringService {
   }
 
   /**
+   * Score pour un produit spécifique (méthode wrapper)
+   * @param {Object} data - Données enrichies multi-sources
+   * @param {string} produit - destratification, pression, matelas_isolants
+   * @returns {number} Score 0-100
+   */
+  scoreForProduct(data, produit) {
+    let result;
+
+    switch(produit) {
+      case 'destratification':
+        result = this.scoreDestratification(data);
+        break;
+      case 'pression':
+        result = this.scorePression(data);
+        break;
+      case 'matelas_isolants':
+        result = this.scoreMatelasIsolants(data);
+        break;
+      default:
+        // Par défaut: destratification
+        result = this.scoreDestratification(data);
+    }
+
+    return result.score || 0;
+  }
+
+  /**
    * Vérifie si un code NAF est pertinent pour un produit
    * @param {string} codeNAF - Code NAF complet (ex: "47.11Z")
    * @param {string} produit - destratification, pression, matelas_isolants

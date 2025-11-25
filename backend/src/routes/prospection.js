@@ -150,11 +150,10 @@ router.post('/search-paginated', authenticateToken, async (req, res) => {
       perPage = 20
     } = req.body;
 
-    // Validation
+    // Validation - Produit optionnel avec valeur par défaut
     if (!produit) {
-      return res.status(400).json({
-        error: 'Produit requis (destratification, pression, matelas_isolants)'
-      });
+      produit = 'destratification'; // Valeur par défaut si non fourni
+      console.log('⚠️ Produit non fourni, utilisation de la valeur par défaut: destratification');
     }
 
     if (!codeNAF && !codesNAF && !departement && !region && !codePostal && !commune) {

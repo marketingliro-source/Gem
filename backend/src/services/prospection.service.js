@@ -398,12 +398,22 @@ class ProspectionService {
 
     const searchParams = {};
     let expandedNafCodes = [];
-    const nafToUse = codesNAF && codesNAF.length > 0 ? codesNAF[0] : codeNAF;
 
-    if (nafToUse) {
-      console.log(`🔧 Code NAF fourni: ${nafToUse}`);
-      expandedNafCodes = nafService.expandPartialCode(nafToUse);
-      console.log(`✨ Expansion NAF: ${nafToUse} → [${expandedNafCodes.join(', ')}]`);
+    // Traiter TOUS les codes NAF fournis (multi-NAF)
+    const nafCodesToProcess = codesNAF && codesNAF.length > 0 ? codesNAF : (codeNAF ? [codeNAF] : []);
+
+    if (nafCodesToProcess.length > 0) {
+      console.log(`🔧 Code(s) NAF fourni(s): ${nafCodesToProcess.join(', ')}`);
+
+      // Expanser CHAQUE code NAF fourni
+      for (const nafCode of nafCodesToProcess) {
+        const expanded = nafService.expandPartialCode(nafCode);
+        expandedNafCodes.push(...expanded);
+      }
+
+      // Supprimer les doublons
+      expandedNafCodes = [...new Set(expandedNafCodes)];
+      console.log(`✨ Expansion NAF: ${nafCodesToProcess.join(', ')} → [${expandedNafCodes.join(', ')}]`);
     }
 
     // Paramètres géographiques
@@ -450,26 +460,11 @@ class ProspectionService {
     console.log(`✅ ${allCompanies.length} entreprises récupérées`);
 
     // === PHASE 2: FILTRAGE NAF/TECHNIQUE (SUR DONNÉES DE BASE) ===
-    console.log('🔧 Phase 2/4: Application des filtres NAF...');
+    console.log('🔧 Phase 2/4: Pas de re-filtrage NAF (déjà fait par l\'API)...');
 
+    // L'API a déjà filtré par NAF dans la Phase 1, pas besoin de re-filtrer
     let filteredCompanies = allCompanies;
-
-    // Filtrage NAF basique (sur activite_principale de l'API)
-    const nafCodes = codesNAF && codesNAF.length > 0 ? codesNAF : (codeNAF ? [codeNAF] : []);
-    if (nafCodes.length > 0) {
-      filteredCompanies = allCompanies.filter(c => {
-        const companyNAF = c.activite_principale || '';
-        if (!companyNAF) return false;
-
-        const companyNAFNormalized = companyNAF.replace(/\./g, '');
-        return nafCodes.some(code => {
-          const codeNormalized = code.replace(/\./g, '');
-          return companyNAFNormalized.startsWith(codeNormalized);
-        });
-      });
-
-      console.log(`✅ ${filteredCompanies.length} entreprises après filtre NAF (${allCompanies.length - filteredCompanies.length} rejetées)`);
-    }
+    console.log(`✅ ${filteredCompanies.length} entreprises conservées`);
 
     // === PHASE 3: PAGINATION ===
     console.log('📄 Phase 3/4: Pagination...');
@@ -543,37 +538,43 @@ class ProspectionService {
           }
         }
 
-        // Hauteur minimale
+        // Hauteur minimale (filtre uniquement si donnée disponible)
         if (match && hauteurMin) {
           const hauteur = p.bdtopo?.hauteur || p.bdnb?.hauteur || p.rnb?.hauteur;
-          if (!hauteur || parseFloat(hauteur) < parseFloat(hauteurMin)) {
+          // Ne rejeter que si hauteur existe ET est inférieure au minimum
+          if (hauteur && parseFloat(hauteur) < parseFloat(hauteurMin)) {
             match = false;
           }
         }
 
-        // Surface minimale
+        // Surface minimale (filtre uniquement si donnée disponible)
         if (match && surfaceMin) {
           const surface = p.bdnb?.surfacePlancher || p.rnb?.surface;
-          if (!surface || parseFloat(surface) < parseFloat(surfaceMin)) {
+          // Ne rejeter que si surface existe ET est inférieure au minimum
+          if (surface && parseFloat(surface) < parseFloat(surfaceMin)) {
             match = false;
           }
         }
 
-        // Type de chauffage
+        // Type de chauffage (filtre uniquement si donnée disponible)
         if (match && typesChauffage && typesChauffage.length > 0) {
           const typeChauffage = p.bdnb?.typeChauffage?.toLowerCase() || '';
           const energieChauffage = p.bdnb?.energieChauffage?.toLowerCase() || '';
-          const chauffageMatch = typesChauffage.some(type => {
-            type = type.toLowerCase();
-            return typeChauffage.includes(type) || energieChauffage.includes(type);
-          });
-          if (!chauffageMatch) match = false;
+          // Ne rejeter que si on a des données de chauffage ET qu'elles ne matchent pas
+          if (typeChauffage || energieChauffage) {
+            const chauffageMatch = typesChauffage.some(type => {
+              type = type.toLowerCase();
+              return typeChauffage.includes(type) || energieChauffage.includes(type);
+            });
+            if (!chauffageMatch) match = false;
+          }
         }
 
-        // Classe DPE
+        // Classe DPE (filtre uniquement si donnée disponible)
         if (match && classesDPE && classesDPE.length > 0) {
           const classeDPE = p.dpe?.classe;
-          if (!classeDPE || !classesDPE.includes(classeDPE.toUpperCase())) {
+          // Ne rejeter que si DPE existe ET n'est pas dans la liste
+          if (classeDPE && !classesDPE.includes(classeDPE.toUpperCase())) {
             match = false;
           }
         }
