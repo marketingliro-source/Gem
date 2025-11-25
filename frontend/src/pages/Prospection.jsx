@@ -759,7 +759,7 @@ const Prospection = () => {
         {/* Boutons d'action */}
         <div className={styles.filterActions}>
           <button
-            onClick={handleSearch}
+            onClick={() => handleSearch(1)}
             disabled={loading}
             className={styles.searchBtn}
           >
