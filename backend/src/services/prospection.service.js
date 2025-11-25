@@ -280,7 +280,12 @@ class ProspectionService {
           const prospectNAF = p.sirene?.codeNAF;
           if (prospectNAF) {
             // Vérifier si le code NAF du prospect commence par l'un des codes NAF recherchés
-            const nafMatch = nafCodes.some(code => prospectNAF.startsWith(code.replace('.', '')));
+            // Normaliser en enlevant les points des deux côtés pour la comparaison
+            const prospectNAFNormalized = prospectNAF.replace(/\./g, '');
+            const nafMatch = nafCodes.some(code => {
+              const codeNormalized = code.replace(/\./g, '');
+              return prospectNAFNormalized.startsWith(codeNormalized);
+            });
             if (!nafMatch) match = false;
           } else {
             // Pas de code NAF = exclure
