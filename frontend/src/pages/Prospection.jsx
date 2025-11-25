@@ -17,8 +17,11 @@ const Prospection = () => {
   // État pour la pagination
   const [pagination, setPagination] = useState({
     page: 1,
-    limit: 20,
-    total: 0
+    perPage: 20,
+    total: 0,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPrevPage: false
   });
 
   // États pour l'autocomplete NAF
@@ -245,7 +248,7 @@ const Prospection = () => {
     setFilters({ ...filters, [name]: value });
   };
 
-  const handleSearch = async () => {
+  const handleSearch = async (pageNumber = 1) => {
     // Validation
     if (filters.codesNAF.length === 0 && !filters.departement && !filters.region && !filters.codePostal) {
       alert('Veuillez sélectionner au moins un critère de recherche (NAF ou géographique)');
@@ -259,19 +262,35 @@ const Prospection = () => {
 
     setLoading(true);
     try {
-      // Préparer le payload avec codesNAF au lieu de codeNAF
+      // Préparer le payload avec pagination
       const searchPayload = {
         ...filters,
         // Si un seul NAF, envoyer aussi codeNAF pour compatibilité
-        codeNAF: filters.codesNAF.length === 1 ? filters.codesNAF[0] : undefined
+        codeNAF: filters.codesNAF.length === 1 ? filters.codesNAF[0] : undefined,
+        produit: filters.typeProduit,
+        page: pageNumber,
+        perPage: pagination.perPage
       };
 
-      const response = await api.post('/prospection/search', searchPayload);
+      const response = await api.post('/prospection/search-paginated', searchPayload);
 
-      setResults(response.data.results || []);
-      setTotalResults(response.data.total || 0);
+      setResults(response.data.data || []);
+      setTotalResults(response.data.pagination?.total || 0);
 
-      console.log('✅ Prospection:', response.data);
+      // Mettre à jour l'état de pagination
+      setPagination({
+        page: response.data.pagination?.page || 1,
+        perPage: response.data.pagination?.perPage || 20,
+        total: response.data.pagination?.total || 0,
+        totalPages: response.data.pagination?.totalPages || 0,
+        hasNextPage: response.data.pagination?.hasNextPage || false,
+        hasPrevPage: response.data.pagination?.hasPrevPage || false
+      });
+
+      // Réinitialiser la sélection
+      setSelectedProspects(new Set());
+
+      console.log('✅ Prospection paginée:', response.data);
 
     } catch (error) {
       console.error('Erreur prospection:', error);
@@ -873,6 +892,34 @@ const Prospection = () => {
               </tbody>
             </table>
           </div>
+
+          {/* Contrôles de pagination */}
+          {pagination.totalPages > 1 && (
+            <div className={styles.paginationControls}>
+              <div className={styles.paginationInfo}>
+                <span>Page {pagination.page} sur {pagination.totalPages}</span>
+                <span className={styles.paginationTotal}>
+                  ({pagination.total.toLocaleString('fr-FR')} résultats au total)
+                </span>
+              </div>
+              <div className={styles.paginationButtons}>
+                <button
+                  onClick={() => handleSearch(pagination.page - 1)}
+                  disabled={!pagination.hasPrevPage || loading}
+                  className={styles.paginationBtn}
+                >
+                  ← Précédent
+                </button>
+                <button
+                  onClick={() => handleSearch(pagination.page + 1)}
+                  disabled={!pagination.hasNextPage || loading}
+                  className={styles.paginationBtn}
+                >
+                  Suivant →
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
