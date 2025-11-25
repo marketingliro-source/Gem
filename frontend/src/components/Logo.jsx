@@ -15,10 +15,7 @@ const Logo = ({ size = 40, collapsed = false }) => {
         style={{
           width: size * 1.6,
           height: size,
-          objectFit: 'contain',
-          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1))',
-          backgroundColor: '#ffffff',
-          borderRadius: '4px'
+          objectFit: 'contain'
         }}
       />
       {!collapsed && (
