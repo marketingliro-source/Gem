@@ -389,8 +389,8 @@ router.post('/import/csv', authenticateToken, requireAdmin, async (req, res) => 
       const results = [];
       const filePath = req.file.path;
 
-      fs.createReadStream(filePath)
-        .pipe(csv({ separator: ';' }))
+      fs.createReadStream(filePath, { encoding: 'utf8' })
+        .pipe(csv({ separator: ';', skipLines: 0, mapHeaders: ({ header }) => header.trim().replace(/^\uFEFF/, '') }))
         .on('data', (data) => results.push(data))
         .on('end', async () => {
           let imported = 0;
