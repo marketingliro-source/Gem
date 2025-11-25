@@ -10,6 +10,17 @@ const Prospection = () => {
   const [totalResults, setTotalResults] = useState(0);
   const [nafSuggestions, setNafSuggestions] = useState([]);
 
+  // États pour la sélection en masse
+  const [selectedProspects, setSelectedProspects] = useState(new Set());
+  const [importing, setImporting] = useState(false);
+
+  // État pour la pagination
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0
+  });
+
   // États pour l'autocomplete NAF
   const [nafAutocompleteQuery, setNafAutocompleteQuery] = useState('');
   const [nafAutocompleteSuggestions, setNafAutocompleteSuggestions] = useState([]);
@@ -331,6 +342,86 @@ const Prospection = () => {
     } catch (error) {
       console.error('Erreur import client:', error);
       alert('Erreur lors de l\'import');
+    }
+  };
+
+  // Gestion de la sélection en masse
+  const toggleSelectProspect = (siret) => {
+    const newSelected = new Set(selectedProspects);
+    if (newSelected.has(siret)) {
+      newSelected.delete(siret);
+    } else {
+      newSelected.add(siret);
+    }
+    setSelectedProspects(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedProspects.size === results.length) {
+      // Tout désélectionner
+      setSelectedProspects(new Set());
+    } else {
+      // Tout sélectionner (page actuelle)
+      const allSirets = new Set(results.map(p => p.siret));
+      setSelectedProspects(allSirets);
+    }
+  };
+
+  // Import en masse des prospects sélectionnés
+  const handleBulkImport = async () => {
+    if (selectedProspects.size === 0) {
+      alert('Veuillez sélectionner au moins un prospect');
+      return;
+    }
+
+    if (!confirm(`Importer ${selectedProspects.size} prospect(s) sélectionné(s) comme clients ?`)) {
+      return;
+    }
+
+    setImporting(true);
+    let importedCount = 0;
+    let failedCount = 0;
+
+    try {
+      // Importer chaque prospect sélectionné
+      for (const siret of selectedProspects) {
+        const prospect = results.find(p => p.siret === siret);
+        if (!prospect) continue;
+
+        try {
+          const clientData = {
+            societe: prospect.denomination,
+            siret: prospect.siret,
+            adresse: prospect.adresse?.adresseComplete || '',
+            code_postal: prospect.adresse?.codePostal || '',
+            telephone: prospect.telephone || '',
+            code_naf: prospect.codeNAF,
+            type_produit: filters.typeProduit || 'destratification',
+            statut: 'nouveau',
+            donnees_techniques: prospect.bdnbData ? {
+              hauteur_max: prospect.bdnbData.hauteur,
+              m2_hors_bureau: prospect.bdnbData.surfacePlancher
+            } : {}
+          };
+
+          await api.post('/clients', clientData);
+          importedCount++;
+        } catch (error) {
+          console.error(`Erreur import ${prospect.denomination}:`, error);
+          failedCount++;
+        }
+      }
+
+      alert(`✅ Import terminé !\n${importedCount} prospect(s) importé(s)\n${failedCount > 0 ? `${failedCount} erreur(s)` : ''}`);
+
+      // Réinitialiser la sélection
+      setSelectedProspects(new Set());
+
+    } catch (error) {
+      console.error('Erreur import en masse:', error);
+      alert('Erreur lors de l\'import en masse');
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -687,16 +778,56 @@ const Prospection = () => {
       {results.length > 0 && (
         <div className={styles.resultsSection}>
           <div className={styles.resultsHeader}>
-            <h2>{totalResults} prospect(s) trouvé(s)</h2>
-            <span className={styles.resultsMeta}>
-              Affichage de {results.length} résultats
-            </span>
+            <div className={styles.resultsHeaderLeft}>
+              <label className={styles.selectAllCheckbox}>
+                <input
+                  type="checkbox"
+                  checked={selectedProspects.size === results.length && results.length > 0}
+                  onChange={toggleSelectAll}
+                />
+                <span>Tout sélectionner ({results.length})</span>
+              </label>
+              <h2>{totalResults} prospect(s) trouvé(s)</h2>
+            </div>
+            <div className={styles.resultsHeaderRight}>
+              {selectedProspects.size > 0 && (
+                <button
+                  onClick={handleBulkImport}
+                  disabled={importing}
+                  className={styles.bulkImportBtn}
+                >
+                  {importing ? (
+                    <>
+                      <Loader size={16} className={styles.spinner} />
+                      Import en cours...
+                    </>
+                  ) : (
+                    <>
+                      <Download size={16} />
+                      Importer {selectedProspects.size} prospect(s)
+                    </>
+                  )}
+                </button>
+              )}
+              <span className={styles.resultsMeta}>
+                Affichage de {results.length} résultats
+              </span>
+            </div>
           </div>
 
           <div className={styles.resultsGrid}>
             {results.map((prospect, index) => (
-              <div key={prospect.siret || index} className={styles.prospectCard}>
+              <div
+                key={prospect.siret || index}
+                className={`${styles.prospectCard} ${selectedProspects.has(prospect.siret) ? styles.selected : ''}`}
+              >
                 <div className={styles.cardHeader}>
+                  <input
+                    type="checkbox"
+                    checked={selectedProspects.has(prospect.siret)}
+                    onChange={() => toggleSelectProspect(prospect.siret)}
+                    className={styles.prospectCheckbox}
+                  />
                   <div className={styles.cardIcon}>
                     <Building2 size={24} />
                   </div>
