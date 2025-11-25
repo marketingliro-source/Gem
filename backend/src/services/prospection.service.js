@@ -661,6 +661,11 @@ class ProspectionService {
         criteria: criteria,
         results: results.map(r => ({
           ...r,
+          // Aplatir les champs SIRENE au niveau racine pour compatibilité frontend
+          denomination: r.sirene?.denomination || '',
+          adresse: r.sirene?.adresse || {},
+          codeNAF: r.sirene?.codeNAF || '',
+          telephone: r.sirene?.telephone || '',
           scorePertinence: r.scoreProduiCible,
           bdnbData: r.bdnb,
           recommandations: r.raisonsProduitCible.map(raison => ({
