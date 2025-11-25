@@ -34,7 +34,7 @@ const Prospection = () => {
     codePostal: '',
     typeProduit: '',
     enrichPhone: false,
-    limit: 20, // 20 par défaut
+    limit: 100, // 100 par défaut (aligné avec backend)
     // Critères techniques
     hauteurMin: '',
     surfaceMin: '',
