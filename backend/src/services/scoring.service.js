@@ -6,10 +6,11 @@
 class ScoringService {
   constructor() {
     // Seuils de qualification minimale par produit
+    // 0 = retourner tous les résultats, triés par score
     this.seuilsMinimaux = {
-      destratification: 50, // 50/100 minimum
-      pression: 45,
-      matelas_isolants: 40
+      destratification: 0, // Tous les résultats
+      pression: 0,         // Tous les résultats
+      matelas_isolants: 0  // Tous les résultats
     };
 
     // Codes NAF prioritaires par produit
