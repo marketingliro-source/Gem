@@ -104,13 +104,47 @@ class ProspectionService {
     let entreprises = [];
 
     try {
-      // Rechercher avec l'API Recherche Entreprises (plus rapide)
-      console.log('🚀 [PROSPECTION] Appel rechercheService.search() avec query="*" (wildcard) et options:', {
+      // L'API Recherche Entreprises ne supporte PAS le wildcard "*"
+      // On doit utiliser une query textuelle réelle (min 3 caractères)
+      // Stratégie : utiliser un terme générique basé sur le contexte
+      let queryText = 'entreprise'; // Fallback par défaut
+
+      // Si on a un code NAF, utiliser le premier mot du libellé comme query
+      const NAF_TO_KEYWORD = {
+        '47.11F': 'hypermarche',
+        '47.11D': 'supermarche',
+        '52.10A': 'entrepot',
+        '52.10B': 'entrepot',
+        '56.10A': 'restaurant',
+        '56.10C': 'restaurant',
+        '56.29A': 'restauration',
+        '93.11Z': 'sport',
+        '10.11Z': 'viande',
+        '10.71A': 'boulangerie',
+        '86.10Z': 'hopital',
+        '87.10A': 'ehpad',
+        '55.10Z': 'hotel',
+        '85.31Z': 'college',
+        '85.32Z': 'lycee',
+        '24.10Z': 'acier',
+        '24.51Z': 'fonderie',
+        '20.11Z': 'chimie',
+        '10.51A': 'laiterie'
+      };
+
+      if (searchParams.codeNAF && NAF_TO_KEYWORD[searchParams.codeNAF]) {
+        queryText = NAF_TO_KEYWORD[searchParams.codeNAF];
+        console.log(`🔍 Utilisation query basée sur NAF: "${queryText}"`);
+      }
+
+      // Rechercher avec l'API Recherche Entreprises
+      console.log('🚀 [PROSPECTION] Appel rechercheService.search() avec query:', {
+        query: queryText,
         ...searchParams,
-        limit: limit  // 🔧 FIX: utiliser "limit" pas "limite" ni "par_page"
+        limit: limit
       });
 
-      const results = await rechercheService.search('*', {
+      const results = await rechercheService.search(queryText, {
         ...searchParams,
         limit: limit
       });
