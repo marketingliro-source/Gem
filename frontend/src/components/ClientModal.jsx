@@ -45,7 +45,14 @@ const ClientModal = ({ client, onClose }) => {
     fonction: client?.fonction || '',
     telephone_signataire: client?.telephone_signataire || '',
     mail_signataire: client?.mail_signataire || '',
-    
+
+    // Contact sur Site
+    nom_contact_site: client?.nom_contact_site || '',
+    prenom_contact_site: client?.prenom_contact_site || '',
+    fonction_contact_site: client?.fonction_contact_site || '',
+    mail_contact_site: client?.mail_contact_site || '',
+    telephone_contact_site: client?.telephone_contact_site || '',
+
     // Produit
     type_produit: client?.type_produit || 'destratification',
     code_naf: client?.code_naf || '',
@@ -198,7 +205,7 @@ const ClientModal = ({ client, onClose }) => {
       } else if (formData.type_produit === 'pression') {
         donneesFinales = {
           nb_groupes: technicalData.nb_groupes,
-          puissance_totale: technicalData.puissance_totale_pression
+          puissance_totale_pression: technicalData.puissance_totale_pression
         };
       } else if (formData.type_produit === 'matelas_isolants') {
         donneesFinales = {
@@ -619,6 +626,63 @@ const ClientModal = ({ client, onClose }) => {
                 </div>
               </div>
 
+              {/* Section Contact sur Site */}
+              <div className={styles.section}>
+                <h3>Contact sur Site</h3>
+                <div className={styles.formGrid}>
+                  <div className={styles.formGroup}>
+                    <label>Nom</label>
+                    <input
+                      type="text"
+                      name="nom_contact_site"
+                      value={formData.nom_contact_site}
+                      onChange={handleChange}
+                      className={styles.input}
+                    />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label>Prénom</label>
+                    <input
+                      type="text"
+                      name="prenom_contact_site"
+                      value={formData.prenom_contact_site}
+                      onChange={handleChange}
+                      className={styles.input}
+                    />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label>Fonction</label>
+                    <input
+                      type="text"
+                      name="fonction_contact_site"
+                      value={formData.fonction_contact_site}
+                      onChange={handleChange}
+                      className={styles.input}
+                    />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label>Email</label>
+                    <input
+                      type="email"
+                      name="mail_contact_site"
+                      value={formData.mail_contact_site}
+                      onChange={handleChange}
+                      className={styles.input}
+                    />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label>Téléphone</label>
+                    <input
+                      type="text"
+                      name="telephone_contact_site"
+                      value={formData.telephone_contact_site}
+                      onChange={handleChange}
+                      className={styles.input}
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Section Produit et Statut */}
               <div className={styles.section}>
                 <h3>Produit CEE</h3>
@@ -633,12 +697,19 @@ const ClientModal = ({ client, onClose }) => {
                       style={{
                         borderColor: PRODUITS.find(p => p.key === formData.type_produit)?.color || '#10b981'
                       }}
+                      disabled={user?.role !== 'admin' && !isNew}
+                      title={user?.role !== 'admin' && !isNew ? 'Seul un administrateur peut changer le type de produit' : ''}
                       required
                     >
                       {PRODUITS.map(p => (
                         <option key={p.key} value={p.key}>{p.label}</option>
                       ))}
                     </select>
+                    {user?.role !== 'admin' && !isNew && (
+                      <small style={{ color: '#94a3b8', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                        Seul un administrateur peut modifier le type de produit
+                      </small>
+                    )}
                   </div>
                   <div className={styles.formGroup}>
                     <label>Statut</label>

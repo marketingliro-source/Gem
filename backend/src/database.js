@@ -131,6 +131,32 @@ try {
   // Colonne existe déjà
 }
 
+// Migration - Ajouter colonnes Contact sur Site
+try {
+  db.prepare('ALTER TABLE clients ADD COLUMN nom_contact_site TEXT').run();
+  console.log('✓ Colonne nom_contact_site ajoutée');
+} catch (e) {}
+
+try {
+  db.prepare('ALTER TABLE clients ADD COLUMN prenom_contact_site TEXT').run();
+  console.log('✓ Colonne prenom_contact_site ajoutée');
+} catch (e) {}
+
+try {
+  db.prepare('ALTER TABLE clients ADD COLUMN fonction_contact_site TEXT').run();
+  console.log('✓ Colonne fonction_contact_site ajoutée');
+} catch (e) {}
+
+try {
+  db.prepare('ALTER TABLE clients ADD COLUMN mail_contact_site TEXT').run();
+  console.log('✓ Colonne mail_contact_site ajoutée');
+} catch (e) {}
+
+try {
+  db.prepare('ALTER TABLE clients ADD COLUMN telephone_contact_site TEXT').run();
+  console.log('✓ Colonne telephone_contact_site ajoutée');
+} catch (e) {}
+
 // Créer un utilisateur admin par défaut si aucun utilisateur n'existe
 const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
 if (userCount.count === 0) {

@@ -118,6 +118,8 @@ router.post('/', authenticateToken, (req, res) => {
       nom_site, adresse_travaux, code_postal_travaux,
       // Contact Signataire
       nom_signataire, fonction, telephone_signataire, mail_signataire,
+      // Contact sur Site
+      nom_contact_site, prenom_contact_site, fonction_contact_site, mail_contact_site, telephone_contact_site,
       // Produit et données
       type_produit, donnees_techniques,
       // Code NAF
@@ -136,13 +138,15 @@ router.post('/', authenticateToken, (req, res) => {
         societe, adresse, code_postal, telephone, siret,
         nom_site, adresse_travaux, code_postal_travaux,
         nom_signataire, fonction, telephone_signataire, mail_signataire,
+        nom_contact_site, prenom_contact_site, fonction_contact_site, mail_contact_site, telephone_contact_site,
         type_produit, donnees_techniques, code_naf,
         assigned_to
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       societe, adresse, code_postal, telephone, siret,
       nom_site, adresse_travaux, code_postal_travaux,
       nom_signataire, fonction, telephone_signataire, mail_signataire,
+      nom_contact_site, prenom_contact_site, fonction_contact_site, mail_contact_site, telephone_contact_site,
       type_produit, donneesJSON, code_naf,
       req.user.id
     );
@@ -170,6 +174,8 @@ router.patch('/:id', authenticateToken, (req, res) => {
       nom_site, adresse_travaux, code_postal_travaux,
       // Contact Signataire
       nom_signataire, fonction, telephone_signataire, mail_signataire,
+      // Contact sur Site
+      nom_contact_site, prenom_contact_site, fonction_contact_site, mail_contact_site, telephone_contact_site,
       // Produit et données
       type_produit, donnees_techniques,
       // Code NAF
@@ -198,6 +204,13 @@ router.patch('/:id', authenticateToken, (req, res) => {
     if (fonction !== undefined) { updates.push('fonction = ?'); params.push(fonction); }
     if (telephone_signataire !== undefined) { updates.push('telephone_signataire = ?'); params.push(telephone_signataire); }
     if (mail_signataire !== undefined) { updates.push('mail_signataire = ?'); params.push(mail_signataire); }
+
+    // Contact sur Site
+    if (nom_contact_site !== undefined) { updates.push('nom_contact_site = ?'); params.push(nom_contact_site); }
+    if (prenom_contact_site !== undefined) { updates.push('prenom_contact_site = ?'); params.push(prenom_contact_site); }
+    if (fonction_contact_site !== undefined) { updates.push('fonction_contact_site = ?'); params.push(fonction_contact_site); }
+    if (mail_contact_site !== undefined) { updates.push('mail_contact_site = ?'); params.push(mail_contact_site); }
+    if (telephone_contact_site !== undefined) { updates.push('telephone_contact_site = ?'); params.push(telephone_contact_site); }
 
     // Produit et données
     if (type_produit !== undefined) { updates.push('type_produit = ?'); params.push(type_produit); }
