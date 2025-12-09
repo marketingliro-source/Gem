@@ -50,11 +50,8 @@ db.exec(`
     -- Code NAF
     code_naf TEXT,
 
-    -- Statut (10 étapes)
-    statut TEXT NOT NULL DEFAULT 'nouveau' CHECK(statut IN (
-      'nouveau', 'a_rappeler', 'mail_infos_envoye', 'infos_recues',
-      'devis_envoye', 'devis_signe', 'pose_prevue', 'pose_terminee', 'coffrac', 'termine'
-    )),
+    -- Statut (key référence la table statuts)
+    statut TEXT NOT NULL DEFAULT 'nouveau',
 
     -- Assignation
     assigned_to INTEGER,
@@ -99,6 +96,16 @@ db.exec(`
     FOREIGN KEY (uploaded_by) REFERENCES users(id)
   );
 
+  CREATE TABLE IF NOT EXISTS statuts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    key TEXT UNIQUE NOT NULL,
+    label TEXT NOT NULL,
+    color TEXT NOT NULL,
+    ordre INTEGER NOT NULL,
+    active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE INDEX IF NOT EXISTS idx_clients_statut ON clients(statut);
   CREATE INDEX IF NOT EXISTS idx_clients_assigned ON clients(assigned_to);
   CREATE INDEX IF NOT EXISTS idx_clients_produit ON clients(type_produit);
@@ -106,6 +113,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_client_comments_client ON client_comments(client_id);
   CREATE INDEX IF NOT EXISTS idx_client_appointments_client ON client_appointments(client_id);
   CREATE INDEX IF NOT EXISTS idx_client_documents_client ON client_documents(client_id);
+  CREATE INDEX IF NOT EXISTS idx_statuts_active ON statuts(active);
+  CREATE INDEX IF NOT EXISTS idx_statuts_ordre ON statuts(ordre);
 `);
 
 // Migrations - Ajouter colonnes IP si elles n'existent pas
@@ -156,6 +165,34 @@ try {
   db.prepare('ALTER TABLE clients ADD COLUMN telephone_contact_site TEXT').run();
   console.log('✓ Colonne telephone_contact_site ajoutée');
 } catch (e) {}
+
+// Migration - Insérer les statuts par défaut
+const statutCount = db.prepare('SELECT COUNT(*) as count FROM statuts').get();
+if (statutCount.count === 0) {
+  const defaultStatuts = [
+    { key: 'nouveau', label: 'Nouveau', color: '#3b82f6', ordre: 1 },
+    { key: 'a_rappeler', label: 'À rappeler', color: '#f59e0b', ordre: 2 },
+    { key: 'mail_infos_envoye', label: 'Mail infos envoyé', color: '#8b5cf6', ordre: 3 },
+    { key: 'infos_recues', label: 'Infos reçues', color: '#06b6d4', ordre: 4 },
+    { key: 'devis_envoye', label: 'Devis envoyé', color: '#10b981', ordre: 5 },
+    { key: 'devis_signe', label: 'Devis signé', color: '#14b8a6', ordre: 6 },
+    { key: 'pose_prevue', label: 'Pose prévue', color: '#6366f1', ordre: 7 },
+    { key: 'pose_terminee', label: 'Pose terminée', color: '#8b5cf6', ordre: 8 },
+    { key: 'coffrac', label: 'Coffrac', color: '#84cc16', ordre: 9 },
+    { key: 'termine', label: 'Terminé', color: '#059669', ordre: 10 }
+  ];
+
+  const insertStatut = db.prepare(`
+    INSERT INTO statuts (key, label, color, ordre, active)
+    VALUES (?, ?, ?, ?, 1)
+  `);
+
+  for (const statut of defaultStatuts) {
+    insertStatut.run(statut.key, statut.label, statut.color, statut.ordre);
+  }
+
+  console.log('✓ Statuts par défaut insérés (10 statuts)');
+}
 
 // Créer un utilisateur admin par défaut si aucun utilisateur n'existe
 const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();

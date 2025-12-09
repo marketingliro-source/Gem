@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
-import { Users, Calendar, LogOut, Menu, X, UserCheck, BarChart2, ChevronDown, ChevronRight, Fan, Wind, Layers, Search } from 'lucide-react';
+import { Users, Calendar, LogOut, Menu, X, UserCheck, BarChart2, ChevronDown, ChevronRight, Fan, Wind, Layers, Search, Settings } from 'lucide-react';
 import styles from './Layout.module.css';
 
 const Layout = ({ children }) => {
@@ -127,6 +127,18 @@ const Layout = ({ children }) => {
             >
               <Users size={sidebarOpen ? 20 : 56} style={{ color: location.pathname === '/users' ? 'white' : '#06b6d4' }} />
               {sidebarOpen && <span>Utilisateurs</span>}
+            </Link>
+          )}
+
+          {/* Settings (admin only) */}
+          {user?.role === 'admin' && (
+            <Link
+              to="/settings"
+              className={`${styles.navItem} ${location.pathname === '/settings' ? styles.active : ''}`}
+              title="Paramètres"
+            >
+              <Settings size={sidebarOpen ? 20 : 56} style={{ color: location.pathname === '/settings' ? 'white' : '#94a3b8' }} />
+              {sidebarOpen && <span>Paramètres</span>}
             </Link>
           )}
         </nav>

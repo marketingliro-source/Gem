@@ -44,19 +44,10 @@ const Clients = () => {
   const [exporting, setExporting] = useState(false);
   const [showImportHelp, setShowImportHelp] = useState(false);
 
-  const STATUTS = [
-    { key: '', label: 'Tous les statuts', color: '#6366f1' },
-    { key: 'nouveau', label: 'Nouveau', color: '#10b981' },
-    { key: 'a_rappeler', label: 'À Rappeler', color: '#f59e0b' },
-    { key: 'mail_infos_envoye', label: 'Mail Infos Envoyé', color: '#3b82f6' },
-    { key: 'infos_recues', label: 'Infos Reçues', color: '#8b5cf6' },
-    { key: 'devis_envoye', label: 'Devis Envoyé', color: '#ec4899' },
-    { key: 'devis_signe', label: 'Devis Signé', color: '#14b8a6' },
-    { key: 'pose_prevue', label: 'Pose Prévue', color: '#f97316' },
-    { key: 'pose_terminee', label: 'Pose Terminée', color: '#06b6d4' },
-    { key: 'coffrac', label: 'Coffrac', color: '#84cc16' },
-    { key: 'termine', label: 'Terminé', color: '#059669' }
-  ];
+  // Statuts dynamiques
+  const [statuts, setStatuts] = useState([
+    { key: '', label: 'Tous les statuts', color: '#6366f1' }
+  ]);
 
   const PRODUITS = [
     { key: '', label: 'Tous les produits' },
@@ -72,8 +63,25 @@ const Clients = () => {
   }, [produit]);
 
   useEffect(() => {
+    fetchStatuts();
+  }, []);
+
+  useEffect(() => {
     fetchClients();
   }, [filterStatut, filterProduit, filterCodeNAF, filterCodePostal, pagination.page, pagination.limit]);
+
+  const fetchStatuts = async () => {
+    try {
+      const response = await api.get('/statuts');
+      // Ajouter l'option "Tous les statuts" en premier
+      setStatuts([
+        { key: '', label: 'Tous les statuts', color: '#6366f1' },
+        ...response.data
+      ]);
+    } catch (error) {
+      console.error('Erreur chargement statuts:', error);
+    }
+  };
 
   const fetchClients = async () => {
     try {
@@ -282,7 +290,7 @@ const Clients = () => {
   };
 
   const getStatutObj = (statut) => {
-    return STATUTS.find(s => s.key === statut) || STATUTS[0];
+    return statuts.find(s => s.key === statut) || statuts[0];
   };
 
   const getProduitObj = (produit) => {
@@ -366,7 +374,7 @@ const Clients = () => {
             }}
             className={styles.statusFilter}
           >
-            {STATUTS.map(status => (
+            {statuts.map(status => (
               <option key={status.key} value={status.key}>
                 {status.label}
               </option>
@@ -518,7 +526,7 @@ const Clients = () => {
                       }}
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {STATUTS.filter(s => s.key !== '').map(status => (
+                      {statuts.filter(s => s.key !== '').map(status => (
                         <option key={status.key} value={status.key}>
                           {status.label}
                         </option>

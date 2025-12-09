@@ -9,6 +9,7 @@ import Clients from './pages/Clients';
 import Calendar from './pages/Calendar';
 import Users from './pages/Users';
 import Prospection from './pages/Prospection';
+import Settings from './pages/Settings';
 
 function App() {
   return (
@@ -61,6 +62,14 @@ function App() {
             <PrivateRoute adminOnly={true}>
               <Layout>
                 <Users />
+              </Layout>
+            </PrivateRoute>
+          } />
+
+          <Route path="/settings" element={
+            <PrivateRoute adminOnly={true}>
+              <Layout>
+                <Settings />
               </Layout>
             </PrivateRoute>
           } />

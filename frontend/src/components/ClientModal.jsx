@@ -82,19 +82,6 @@ const ClientModal = ({ client, onClose }) => {
     ps_estimes: client?.donnees_techniques?.ps_estimes || ''
   });
 
-  const STATUTS = [
-    { key: 'nouveau', label: 'Nouveau', color: '#10b981' },
-    { key: 'a_rappeler', label: 'À Rappeler', color: '#f59e0b' },
-    { key: 'mail_infos_envoye', label: 'Mail Infos Envoyé', color: '#3b82f6' },
-    { key: 'infos_recues', label: 'Infos Reçues', color: '#8b5cf6' },
-    { key: 'devis_envoye', label: 'Devis Envoyé', color: '#ec4899' },
-    { key: 'devis_signe', label: 'Devis Signé', color: '#14b8a6' },
-    { key: 'pose_prevue', label: 'Pose Prévue', color: '#f97316' },
-    { key: 'pose_terminee', label: 'Pose Terminée', color: '#06b6d4' },
-    { key: 'coffrac', label: 'Coffrac', color: '#84cc16' },
-    { key: 'termine', label: 'Terminé', color: '#059669' }
-  ];
-
   const PRODUITS = [
     { key: 'destratification', label: 'Destratification', color: '#10b981' },
     { key: 'pression', label: 'Pression', color: '#8b5cf6' },
@@ -102,6 +89,7 @@ const ClientModal = ({ client, onClose }) => {
   ];
 
   const [telepros, setTelepros] = useState([]);
+  const [statuts, setStatuts] = useState([]);
 
   useEffect(() => {
     if (!isNew) {
@@ -112,7 +100,17 @@ const ClientModal = ({ client, onClose }) => {
     if (user?.role === 'admin') {
       fetchTelepros();
     }
+    fetchStatuts();
   }, []);
+
+  const fetchStatuts = async () => {
+    try {
+      const response = await api.get('/statuts');
+      setStatuts(response.data);
+    } catch (error) {
+      console.error('Erreur chargement statuts:', error);
+    }
+  };
 
   const fetchTelepros = async () => {
     try {
@@ -733,10 +731,10 @@ const ClientModal = ({ client, onClose }) => {
                       onChange={handleChange}
                       className={styles.styledSelect}
                       style={{
-                        borderColor: STATUTS.find(s => s.key === formData.statut)?.color || '#10b981'
+                        borderColor: statuts.find(s => s.key === formData.statut)?.color || '#10b981'
                       }}
                     >
-                      {STATUTS.map(s => (
+                      {statuts.map(s => (
                         <option key={s.key} value={s.key}>{s.label}</option>
                       ))}
                     </select>

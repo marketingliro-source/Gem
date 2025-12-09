@@ -13,6 +13,7 @@ const documentsRoutes = require('./routes/documents');
 const enrichmentRoutes = require('./routes/enrichment');
 const prospectionRoutes = require('./routes/prospection');
 const nafRoutes = require('./routes/naf');
+const statutsRoutes = require('./routes/statuts');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -34,6 +35,7 @@ app.use('/api/documents', documentsRoutes);
 app.use('/api/enrichment', enrichmentRoutes);
 app.use('/api/prospection', prospectionRoutes);
 app.use('/api/naf', nafRoutes);
+app.use('/api/statuts', statutsRoutes);
 
 // Route de test
 app.get('/api/health', (req, res) => {
