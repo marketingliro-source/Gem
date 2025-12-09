@@ -101,13 +101,27 @@ const ClientModal = ({ client, onClose }) => {
     { key: 'matelas_isolants', label: 'Matelas Isolants', color: '#f59e0b' }
   ];
 
+  const [telepros, setTelepros] = useState([]);
+
   useEffect(() => {
     if (!isNew) {
       fetchDocuments();
       fetchComments();
       fetchAppointments();
     }
+    if (user?.role === 'admin') {
+      fetchTelepros();
+    }
   }, []);
+
+  const fetchTelepros = async () => {
+    try {
+      const response = await api.get('/users/telepros');
+      setTelepros(response.data);
+    } catch (error) {
+      console.error('Erreur chargement télépros:', error);
+    }
+  };
 
   const fetchDocuments = async () => {
     try {
@@ -727,6 +741,32 @@ const ClientModal = ({ client, onClose }) => {
                       ))}
                     </select>
                   </div>
+                  {user?.role === 'admin' && !isNew && (
+                    <div className={styles.formGroup}>
+                      <label>Attribué à</label>
+                      <select
+                        value={client?.assigned_to || ''}
+                        onChange={async (e) => {
+                          const userId = e.target.value;
+                          if (userId) {
+                            try {
+                              await api.patch(`/clients/${client.id}/assign`, { userId: parseInt(userId) });
+                              alert('Client attribué avec succès');
+                            } catch (error) {
+                              console.error('Erreur attribution:', error);
+                              alert('Erreur lors de l\'attribution');
+                            }
+                          }
+                        }}
+                        className={styles.styledSelect}
+                      >
+                        <option value="">Non attribué</option>
+                        {telepros.map(t => (
+                          <option key={t.id} value={t.id}>{t.username}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
               </div>
 

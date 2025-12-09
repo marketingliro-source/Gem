@@ -561,4 +561,93 @@ router.get('/export/excel', authenticateToken, async (req, res) => {
   }
 });
 
+// Attribuer un client à un télépro (admin only)
+router.patch('/:id/assign', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId requis' });
+    }
+
+    // Vérifier que le user existe et est un télépro ou admin
+    const user = db.prepare('SELECT id, role FROM users WHERE id = ?').get(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    }
+
+    // Vérifier que le client existe
+    const client = db.prepare('SELECT id FROM clients WHERE id = ?').get(id);
+    if (!client) {
+      return res.status(404).json({ error: 'Client non trouvé' });
+    }
+
+    // Mettre à jour l'attribution
+    db.prepare('UPDATE clients SET assigned_to = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .run(userId, id);
+
+    const updatedClient = db.prepare(`
+      SELECT c.*, u.username as assigned_username
+      FROM clients c
+      LEFT JOIN users u ON c.assigned_to = u.id
+      WHERE c.id = ?
+    `).get(id);
+
+    res.json({
+      message: 'Client attribué avec succès',
+      client: updatedClient
+    });
+
+  } catch (error) {
+    console.error('Erreur attribution client:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Attribution en masse de clients (admin only)
+router.post('/bulk-assign', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { clientIds, userId } = req.body;
+
+    if (!clientIds || !Array.isArray(clientIds) || clientIds.length === 0) {
+      return res.status(400).json({ error: 'clientIds requis (array non vide)' });
+    }
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId requis' });
+    }
+
+    // Vérifier que le user existe
+    const user = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    }
+
+    // Préparer la requête d'update avec placeholders
+    const placeholders = clientIds.map(() => '?').join(',');
+    const updateQuery = `
+      UPDATE clients
+      SET assigned_to = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id IN (${placeholders})
+    `;
+
+    const result = db.prepare(updateQuery).run(userId, ...clientIds);
+
+    res.json({
+      message: `${result.changes} client(s) attribué(s) avec succès`,
+      assignedTo: {
+        id: user.id,
+        username: user.username,
+        role: user.role
+      },
+      count: result.changes
+    });
+
+  } catch (error) {
+    console.error('Erreur attribution en masse:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

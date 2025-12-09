@@ -3,11 +3,12 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import {
   Search, Plus, FileText, Trash2, RefreshCw, Download, Upload,
-  ChevronLeft, ChevronRight, MessageSquare, HelpCircle
+  ChevronLeft, ChevronRight, MessageSquare, HelpCircle, UserCheck
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import ClientModal from '../components/ClientModal';
 import ImportCSVHelpModal from '../components/ImportCSVHelpModal';
+import AssignClientsModal from '../components/AssignClientsModal';
 import styles from './Clients.module.css';
 
 const Clients = () => {
@@ -30,6 +31,9 @@ const Clients = () => {
 
   // Sélection multiple
   const [selectedClients, setSelectedClients] = useState([]);
+
+  // Modal attribution
+  const [showAssignModal, setShowAssignModal] = useState(false);
 
   // Preview commentaires
   const [hoveredClient, setHoveredClient] = useState(null);
@@ -424,6 +428,11 @@ const Clients = () => {
         <div className={styles.bulkActions}>
           <span>{selectedClients.length} sélectionné(s)</span>
           <div className={styles.bulkButtons}>
+            {user?.role === 'admin' && (
+              <button onClick={() => setShowAssignModal(true)} className={styles.btnPrimary}>
+                <UserCheck size={16} /> Attribuer
+              </button>
+            )}
             <button onClick={handleBulkDelete} className={styles.btnDanger}>
               <Trash2 size={16} /> Supprimer
             </button>
@@ -623,6 +632,18 @@ const Clients = () => {
         isOpen={showImportHelp}
         onClose={() => setShowImportHelp(false)}
       />
+
+      {/* Modal d'attribution en masse */}
+      {showAssignModal && (
+        <AssignClientsModal
+          clientIds={selectedClients}
+          onClose={() => setShowAssignModal(false)}
+          onAssigned={() => {
+            setSelectedClients([]);
+            fetchClients();
+          }}
+        />
+      )}
     </div>
   );
 };
