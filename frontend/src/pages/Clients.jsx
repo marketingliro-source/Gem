@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import {
   Search, Plus, FileText, Trash2, RefreshCw, Download, Upload,
-  ChevronLeft, ChevronRight, MessageSquare, HelpCircle, UserCheck
+  ChevronLeft, ChevronRight, MessageSquare, HelpCircle, UserCheck, Copy
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import ClientModal from '../components/ClientModal';
@@ -163,6 +163,27 @@ const Clients = () => {
       fetchClients();
     } catch (error) {
       alert('Erreur lors de la suppression');
+    }
+  };
+
+  const handleDuplicateClient = async (client) => {
+    if (!window.confirm(`Dupliquer le client "${client.societe}" avec tous ses commentaires, rendez-vous et documents ?`)) {
+      return;
+    }
+
+    try {
+      const response = await api.post(`/clients/${client.id}/duplicate`);
+      alert(`Client dupliqué avec succès!\n\n` +
+        `✅ ${response.data.copied.comments} commentaire(s)\n` +
+        `✅ ${response.data.copied.appointments} rendez-vous futur(s)\n` +
+        `✅ ${response.data.copied.documents} document(s)`
+      );
+      fetchClients();
+      // Ouvrir le modal du nouveau client
+      setSelectedClient(response.data.client);
+    } catch (error) {
+      console.error('Erreur duplication:', error);
+      alert('Erreur lors de la duplication du client');
     }
   };
 
@@ -552,6 +573,16 @@ const Clients = () => {
                         className={styles.btnView}
                       >
                         Voir
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDuplicateClient(client);
+                        }}
+                        className={styles.btnSecondary}
+                        title="Dupliquer ce client"
+                      >
+                        <Copy size={16} />
                       </button>
                     </div>
                   </td>

@@ -650,4 +650,118 @@ router.post('/bulk-assign', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
+// Dupliquer un client avec toutes ses données
+router.post('/:id/duplicate', authenticateToken, (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Récupérer le client source
+    const sourceClient = db.prepare('SELECT * FROM clients WHERE id = ?').get(id);
+    if (!sourceClient) {
+      return res.status(404).json({ error: 'Client non trouvé' });
+    }
+
+    // Créer le nouveau client (copie complète sauf id, created_at, updated_at)
+    const newClientResult = db.prepare(`
+      INSERT INTO clients (
+        societe, adresse, code_postal, telephone, siret,
+        nom_site, adresse_travaux, code_postal_travaux,
+        nom_signataire, fonction, telephone_signataire, mail_signataire,
+        nom_contact_site, prenom_contact_site, fonction_contact_site, mail_contact_site, telephone_contact_site,
+        type_produit, donnees_techniques, code_naf,
+        statut, assigned_to, donnees_enrichies
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      `${sourceClient.societe} (copie)`,
+      sourceClient.adresse,
+      sourceClient.code_postal,
+      sourceClient.telephone,
+      sourceClient.siret,
+      sourceClient.nom_site,
+      sourceClient.adresse_travaux,
+      sourceClient.code_postal_travaux,
+      sourceClient.nom_signataire,
+      sourceClient.fonction,
+      sourceClient.telephone_signataire,
+      sourceClient.mail_signataire,
+      sourceClient.nom_contact_site,
+      sourceClient.prenom_contact_site,
+      sourceClient.fonction_contact_site,
+      sourceClient.mail_contact_site,
+      sourceClient.telephone_contact_site,
+      sourceClient.type_produit,
+      sourceClient.donnees_techniques,
+      sourceClient.code_naf,
+      'nouveau', // Statut réinitialisé
+      req.user.id, // Attribué à l'utilisateur courant
+      sourceClient.donnees_enrichies
+    );
+
+    const newClientId = newClientResult.lastInsertRowid;
+
+    // Copier les commentaires
+    const comments = db.prepare('SELECT * FROM client_comments WHERE client_id = ?').all(id);
+    const commentInsert = db.prepare(`
+      INSERT INTO client_comments (client_id, user_id, content, created_at)
+      VALUES (?, ?, ?, ?)
+    `);
+
+    for (const comment of comments) {
+      commentInsert.run(newClientId, comment.user_id, comment.content, comment.created_at);
+    }
+
+    // Copier les rendez-vous (ajuster les dates futures uniquement)
+    const appointments = db.prepare('SELECT * FROM client_appointments WHERE client_id = ?').all(id);
+    const appointmentInsert = db.prepare(`
+      INSERT INTO client_appointments (client_id, user_id, title, date, time, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const appt of appointments) {
+      const apptDate = new Date(appt.date);
+      const now = new Date();
+      // Copier seulement les RDV futurs
+      if (apptDate >= now) {
+        appointmentInsert.run(newClientId, appt.user_id, appt.title, appt.date, appt.time, appt.created_at);
+      }
+    }
+
+    // Copier les documents (références seulement, pas les fichiers physiques pour simplicité)
+    const documents = db.prepare('SELECT * FROM client_documents WHERE client_id = ?').all(id);
+    const documentInsert = db.prepare(`
+      INSERT INTO client_documents (client_id, file_name, file_path, file_type, file_size, uploaded_by, uploaded_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const doc of documents) {
+      documentInsert.run(
+        newClientId,
+        doc.file_name,
+        doc.file_path, // Même fichier partagé
+        doc.file_type,
+        doc.file_size,
+        doc.uploaded_by,
+        doc.uploaded_at
+      );
+    }
+
+    // Récupérer le client créé
+    const newClient = db.prepare('SELECT * FROM clients WHERE id = ?').get(newClientId);
+
+    res.status(201).json({
+      message: 'Client dupliqué avec succès',
+      client: newClient,
+      copied: {
+        comments: comments.length,
+        appointments: appointments.filter(a => new Date(a.date) >= new Date()).length,
+        documents: documents.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Erreur duplication client:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
