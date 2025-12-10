@@ -75,16 +75,30 @@ const ClientModal = ({ client, onClose }) => {
     puissance_totale: client?.donnees_techniques?.puissance_totale || '',
     marque_chauffage: client?.donnees_techniques?.marque_chauffage || '',
     nb_zones: client?.donnees_techniques?.nb_zones || '',
-    
-    // Pression
-    nb_groupes: client?.donnees_techniques?.nb_groupes || '',
-    puissance_totale_pression: client?.donnees_techniques?.puissance_totale_pression || '',
-    
+
     // Matelas
     chaufferie: client?.donnees_techniques?.chaufferie || '',
     calorifuge: client?.donnees_techniques?.calorifuge || '',
     ps_estimes: client?.donnees_techniques?.ps_estimes || ''
   });
+
+  // Groupes de pression dynamiques
+  const initGroupesPression = () => {
+    if (client?.donnees_techniques?.groupes_pression && Array.isArray(client.donnees_techniques.groupes_pression)) {
+      return client.donnees_techniques.groupes_pression;
+    }
+    // Migration: si ancien format (nb_groupes/puissance_totale_pression)
+    if (client?.donnees_techniques?.nb_groupes || client?.donnees_techniques?.puissance_totale_pression) {
+      const nbGroupes = parseInt(client.donnees_techniques.nb_groupes) || 1;
+      const puissanceTotal = parseFloat(client.donnees_techniques.puissance_totale_pression) || 0;
+      return Array.from({ length: nbGroupes }, (_, i) => ({
+        numero: i + 1,
+        puissance: i === 0 ? puissanceTotal : 0
+      }));
+    }
+    return [{ numero: 1, puissance: 0 }];
+  };
+  const [groupesPression, setGroupesPression] = useState(initGroupesPression());
 
   const PRODUITS = [
     { key: 'destratification', label: 'Destratification', color: '#10b981' },
@@ -171,6 +185,26 @@ const ClientModal = ({ client, onClose }) => {
     setTechnicalData({ ...technicalData, [e.target.name]: e.target.value });
   };
 
+  // Gestion des groupes de pression dynamiques
+  const handleAddGroupe = () => {
+    const nextNumero = groupesPression.length + 1;
+    setGroupesPression([...groupesPression, { numero: nextNumero, puissance: 0 }]);
+  };
+
+  const handleRemoveGroupe = (index) => {
+    if (groupesPression.length === 1) {
+      alert('Vous devez avoir au moins un groupe');
+      return;
+    }
+    setGroupesPression(groupesPression.filter((_, i) => i !== index));
+  };
+
+  const handleGroupeChange = (index, field, value) => {
+    const updated = [...groupesPression];
+    updated[index][field] = field === 'puissance' ? parseFloat(value) || 0 : value;
+    setGroupesPression(updated);
+  };
+
   /**
    * Enrichissement automatique via SIRET
    * Remplit le formulaire avec les données des APIs externes
@@ -231,8 +265,7 @@ const ClientModal = ({ client, onClose }) => {
         };
       } else if (formData.type_produit === 'pression') {
         donneesFinales = {
-          nb_groupes: technicalData.nb_groupes,
-          puissance_totale_pression: technicalData.puissance_totale_pression
+          groupes_pression: groupesPression
         };
       } else if (formData.type_produit === 'matelas_isolants') {
         donneesFinales = {
@@ -894,16 +927,108 @@ const ClientModal = ({ client, onClose }) => {
                   )}
 
                   {formData.type_produit === 'pression' && (
-                    <>
-                      <div className={styles.formGroup}>
-                        <label>Nombre de Groupes</label>
-                        <input type="number" name="nb_groupes" value={technicalData.nb_groupes} onChange={handleTechnicalChange} className={styles.input} />
+                    <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                        <label style={{ margin: 0 }}>Groupes de Pression</label>
+                        <button
+                          type="button"
+                          onClick={handleAddGroupe}
+                          className={styles.addButton}
+                          style={{
+                            background: '#8b5cf6',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            padding: '6px 12px',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <span style={{ fontSize: '18px', fontWeight: 'bold' }}>+</span>
+                          Ajouter un groupe
+                        </button>
                       </div>
-                      <div className={styles.formGroup}>
-                        <label>Puissance Totale (kW)</label>
-                        <input type="number" name="puissance_totale_pression" value={technicalData.puissance_totale_pression} onChange={handleTechnicalChange} className={styles.input} />
+
+                      {groupesPression.map((groupe, index) => (
+                        <div
+                          key={index}
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '100px 1fr 40px',
+                            gap: '12px',
+                            alignItems: 'center',
+                            padding: '12px',
+                            background: 'rgba(139, 92, 246, 0.05)',
+                            borderRadius: '8px',
+                            border: '1px solid rgba(139, 92, 246, 0.2)',
+                            marginBottom: '8px'
+                          }}
+                        >
+                          <div>
+                            <label style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '4px', display: 'block' }}>
+                              Groupe
+                            </label>
+                            <input
+                              type="number"
+                              value={groupe.numero}
+                              onChange={(e) => handleGroupeChange(index, 'numero', e.target.value)}
+                              className={styles.input}
+                              style={{ padding: '8px', fontSize: '14px' }}
+                            />
+                          </div>
+
+                          <div>
+                            <label style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '4px', display: 'block' }}>
+                              Puissance (kW)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.1"
+                              value={groupe.puissance}
+                              onChange={(e) => handleGroupeChange(index, 'puissance', e.target.value)}
+                              className={styles.input}
+                              style={{ padding: '8px', fontSize: '14px' }}
+                              placeholder="Ex: 150"
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveGroupe(index)}
+                            disabled={groupesPression.length === 1}
+                            style={{
+                              background: groupesPression.length === 1 ? '#64748b' : '#ef4444',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '8px',
+                              cursor: groupesPression.length === 1 ? 'not-allowed' : 'pointer',
+                              fontSize: '18px',
+                              marginTop: '18px',
+                              opacity: groupesPression.length === 1 ? 0.5 : 1
+                            }}
+                            title={groupesPression.length === 1 ? 'Au moins un groupe requis' : 'Supprimer ce groupe'}
+                          >
+                            −
+                          </button>
+                        </div>
+                      ))}
+
+                      <div style={{
+                        marginTop: '12px',
+                        padding: '8px 12px',
+                        background: 'rgba(139, 92, 246, 0.1)',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        color: '#8b5cf6',
+                        fontWeight: '500'
+                      }}>
+                        Total: {groupesPression.length} groupe(s) • Puissance totale: {groupesPression.reduce((sum, g) => sum + (parseFloat(g.puissance) || 0), 0).toFixed(1)} kW
                       </div>
-                    </>
+                    </div>
                   )}
 
                   {formData.type_produit === 'matelas_isolants' && (

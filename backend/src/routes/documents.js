@@ -118,7 +118,7 @@ router.get('/client/:clientId', authenticateToken, (req, res) => {
         users.username as uploaded_by_username
       FROM client_documents
       LEFT JOIN users ON client_documents.uploaded_by = users.id
-      WHERE client_id = ?
+      WHERE client_base_id = ?
       ORDER BY uploaded_at DESC
     `).all(clientId);
 

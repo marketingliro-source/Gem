@@ -142,20 +142,20 @@ const Clients = () => {
     }
   };
 
-  // Sélection multiple
+  // Sélection multiple (utilise produit_id pour l'attribution)
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedClients(filteredClients.map(client => client.id));
+      setSelectedClients(filteredClients.map(client => client.produit_id));
     } else {
       setSelectedClients([]);
     }
   };
 
-  const handleSelectClient = (clientId) => {
+  const handleSelectClient = (produitId) => {
     setSelectedClients(prev =>
-      prev.includes(clientId)
-        ? prev.filter(id => id !== clientId)
-        : [...prev, clientId]
+      prev.includes(produitId)
+        ? prev.filter(id => id !== produitId)
+        : [...prev, produitId]
     );
   };
 
@@ -181,10 +181,14 @@ const Clients = () => {
 
     try {
       const response = await api.post(`/clients/${client.id}/duplicate`);
+
+      // Gérer le format de réponse (avec ou sans détails copied)
+      const copied = response.data.copied || { comments: 0, appointments: 0, documents: 0 };
+
       alert(`Client dupliqué avec succès!\n\n` +
-        `✅ ${response.data.copied.comments} commentaire(s)\n` +
-        `✅ ${response.data.copied.appointments} rendez-vous futur(s)\n` +
-        `✅ ${response.data.copied.documents} document(s)`
+        `✅ ${copied.comments} commentaire(s)\n` +
+        `✅ ${copied.appointments} rendez-vous futur(s)\n` +
+        `✅ ${copied.documents} document(s)`
       );
       fetchClients();
       // Ouvrir le modal du nouveau client
@@ -500,13 +504,13 @@ const Clients = () => {
               {filteredClients.map(client => (
                 <tr
                   key={client.id}
-                  className={selectedClients.includes(client.id) ? styles.selected : ''}
+                  className={selectedClients.includes(client.produit_id) ? styles.selected : ''}
                 >
                   <td>
                     <input
                       type="checkbox"
-                      checked={selectedClients.includes(client.id)}
-                      onChange={() => handleSelectClient(client.id)}
+                      checked={selectedClients.includes(client.produit_id)}
+                      onChange={() => handleSelectClient(client.produit_id)}
                     />
                   </td>
                   <td className={styles.name}>{client.societe || '-'}</td>
