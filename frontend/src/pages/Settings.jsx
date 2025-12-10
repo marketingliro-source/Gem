@@ -77,14 +77,14 @@ const Settings = () => {
     <div className={styles.page}>
       <div className={styles.header}>
         <div>
-          <h1>Paramètres</h1>
-          <p style={{ color: '#94a3b8', marginTop: '8px' }}>
+          <h1 className={styles.title}>Paramètres</h1>
+          <p className={styles.subtitle}>
             Gérer les statuts du CRM (réservé aux administrateurs)
           </p>
         </div>
         <button
           onClick={() => setShowAddForm(true)}
-          className={styles.btnPrimary}
+          className={styles.addBtn}
         >
           <Plus size={20} /> Nouveau statut
         </button>
@@ -159,15 +159,22 @@ const Settings = () => {
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
             <button
               onClick={() => setShowAddForm(false)}
-              className={styles.btnSecondary}
+              className={styles.iconBtn}
+              style={{ padding: '10px 20px', fontSize: '14px' }}
             >
-              Annuler
+              <X size={16} /> Annuler
             </button>
             <button
               onClick={handleAddStatut}
-              className={styles.btnPrimary}
+              className={styles.addBtn}
+              style={{
+                padding: '10px 20px',
+                fontSize: '14px',
+                textTransform: 'none',
+                letterSpacing: 'normal'
+              }}
             >
-              <Save size={16} /> Créer
+              <Save size={16} /> Créer le statut
             </button>
           </div>
         </div>
@@ -268,15 +275,16 @@ const Settings = () => {
                       <>
                         <button
                           onClick={() => handleSaveEdit(statut.id)}
-                          className={styles.btnPrimary}
-                          style={{ padding: '6px 12px', fontSize: '13px' }}
+                          className={styles.btnSecondary}
+                          title="Enregistrer"
                         >
                           <Save size={14} />
                         </button>
                         <button
                           onClick={() => setEditingId(null)}
-                          className={styles.btnSecondary}
-                          style={{ padding: '6px 12px', fontSize: '13px' }}
+                          className={styles.iconBtn}
+                          style={{ padding: '8px 16px' }}
+                          title="Annuler"
                         >
                           <X size={14} />
                         </button>
@@ -286,14 +294,13 @@ const Settings = () => {
                         <button
                           onClick={() => handleStartEdit(statut)}
                           className={styles.btnSecondary}
-                          style={{ padding: '6px 12px', fontSize: '13px' }}
+                          title="Modifier"
                         >
                           <Edit2 size={14} />
                         </button>
                         <button
                           onClick={() => handleToggleActive(statut.id)}
-                          className={styles.btnSecondary}
-                          style={{ padding: '6px 12px', fontSize: '13px' }}
+                          className={statut.active === 1 ? styles.btnWarning : styles.btnSecondary}
                           title={statut.active === 1 ? 'Désactiver' : 'Activer'}
                         >
                           {statut.active === 1 ? <EyeOff size={14} /> : <Eye size={14} />}
