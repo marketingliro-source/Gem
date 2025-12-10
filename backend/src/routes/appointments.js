@@ -12,17 +12,18 @@ router.get('/', authenticateToken, (req, res) => {
     let query = `
       SELECT
         client_appointments.id,
-        client_appointments.client_id,
+        client_appointments.client_base_id,
         client_appointments.title,
         client_appointments.date,
         client_appointments.time,
+        client_appointments.location,
+        client_appointments.notes,
         client_appointments.created_at,
-        clients.societe,
-        clients.nom_signataire,
-        clients.type_produit,
+        client_base.societe,
+        client_base.nom_signataire,
         users.username
       FROM client_appointments
-      JOIN clients ON client_appointments.client_id = clients.id
+      JOIN client_base ON client_appointments.client_base_id = client_base.id
       JOIN users ON client_appointments.user_id = users.id
       WHERE 1=1
     `;
@@ -51,6 +52,7 @@ router.get('/', authenticateToken, (req, res) => {
     const appointments = db.prepare(query).all(...params);
     res.json(appointments);
   } catch (error) {
+    console.error('Erreur GET appointments:', error);
     res.status(500).json({ error: error.message });
   }
 });
