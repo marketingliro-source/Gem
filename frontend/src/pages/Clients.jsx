@@ -458,12 +458,12 @@ const Clients = () => {
           <span>{selectedClients.length} sélectionné(s)</span>
           <div className={styles.bulkButtons}>
             {user?.role === 'admin' && (
-              <button onClick={() => setShowAssignModal(true)} className={styles.btnPrimary}>
-                <UserCheck size={16} /> Attribuer
+              <button onClick={() => setShowAssignModal(true)} className={styles.btnSecondary}>
+                <UserCheck size={16} /> Attribuer ({selectedClients.length})
               </button>
             )}
             <button onClick={handleBulkDelete} className={styles.btnDanger}>
-              <Trash2 size={16} /> Supprimer
+              <Trash2 size={16} /> Supprimer ({selectedClients.length})
             </button>
           </div>
         </div>
