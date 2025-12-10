@@ -964,34 +964,35 @@ router.post('/produits/bulk-delete', authenticateToken, (req, res) => {
 
 // Dupliquer un PRODUIT spécifique avec choix du type_produit cible
 router.post('/produits/:produitId/duplicate', authenticateToken, (req, res) => {
-  try {
-    const { produitId } = req.params;
-    const { type_produit } = req.body;
+  const { produitId } = req.params;
+  const { type_produit } = req.body;
 
-    if (!type_produit) {
-      return res.status(400).json({ error: 'type_produit requis dans le body' });
-    }
+  if (!type_produit) {
+    return res.status(400).json({ error: 'type_produit requis dans le body' });
+  }
 
-    // Valider type_produit
-    const validTypes = ['destratification', 'pression', 'matelas_isolants'];
-    if (!validTypes.includes(type_produit)) {
-      return res.status(400).json({ error: 'type_produit invalide' });
-    }
+  // Valider type_produit
+  const validTypes = ['destratification', 'pression', 'matelas_isolants'];
+  if (!validTypes.includes(type_produit)) {
+    return res.status(400).json({ error: 'type_produit invalide' });
+  }
 
-    // Récupérer le produit source
-    const sourceProduit = db.prepare(`
-      SELECT cp.*, cb.*
-      FROM clients_produits cp
-      INNER JOIN client_base cb ON cp.client_base_id = cb.id
-      WHERE cp.id = ?
-    `).get(produitId);
+  // Récupérer le produit source (avant la transaction)
+  const sourceProduit = db.prepare(`
+    SELECT cp.*, cb.*
+    FROM clients_produits cp
+    INNER JOIN client_base cb ON cp.client_base_id = cb.id
+    WHERE cp.id = ?
+  `).get(produitId);
 
-    if (!sourceProduit) {
-      return res.status(404).json({ error: 'Produit source non trouvé' });
-    }
+  if (!sourceProduit) {
+    return res.status(404).json({ error: 'Produit source non trouvé' });
+  }
 
-    console.log(`Duplication produit ${produitId}: ${sourceProduit.societe} → ${type_produit}`);
+  console.log(`Duplication produit ${produitId}: ${sourceProduit.societe} → ${type_produit}`);
 
+  // Transaction atomique: tout ou rien
+  const duplicateTransaction = db.transaction(() => {
     // Créer nouveau client_base (copie)
     const newBaseResult = db.prepare(`
       INSERT INTO client_base (
@@ -1061,7 +1062,7 @@ router.post('/produits/:produitId/duplicate', authenticateToken, (req, res) => {
 
     console.log(`✅ Duplication réussie: ${commentsResult.changes} commentaires, ${appointmentsResult.changes} RDV, ${documentsResult.changes} docs`);
 
-    res.status(201).json({
+    return {
       message: 'Client dupliqué avec succès',
       id: newClientBaseId,
       client_base_id: newClientBaseId,
@@ -1072,8 +1073,13 @@ router.post('/produits/:produitId/duplicate', authenticateToken, (req, res) => {
         appointments: appointmentsResult.changes,
         documents: documentsResult.changes
       }
-    });
+    };
+  });
 
+  // Exécuter la transaction
+  try {
+    const result = duplicateTransaction();
+    res.status(201).json(result);
   } catch (error) {
     console.error('Erreur duplication produit:', error);
     res.status(500).json({ error: error.message });

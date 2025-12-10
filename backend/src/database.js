@@ -92,6 +92,8 @@ if (isMigrated) {
       title TEXT NOT NULL,
       date TEXT NOT NULL,
       time TEXT NOT NULL,
+      location TEXT,
+      notes TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (client_base_id) REFERENCES client_base(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES users(id)
