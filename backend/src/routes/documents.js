@@ -70,17 +70,17 @@ router.post('/upload/:clientId', authenticateToken, upload.single('file'), (req,
 
     const { clientId } = req.params;
 
-    // Vérifier que le client existe
-    const client = db.prepare('SELECT id FROM clients WHERE id = ?').get(clientId);
+    // Vérifier que le client existe (architecture multi-produits)
+    const client = db.prepare('SELECT id FROM client_base WHERE id = ?').get(clientId);
     if (!client) {
       // Supprimer le fichier uploadé si le client n'existe pas
       fs.unlinkSync(req.file.path);
       return res.status(404).json({ error: 'Client introuvable' });
     }
 
-    // Enregistrer le document dans la base de données
+    // Enregistrer le document dans la base de données (client_base_id)
     const result = db.prepare(`
-      INSERT INTO client_documents (client_id, file_name, file_path, file_type, file_size, uploaded_by)
+      INSERT INTO client_documents (client_base_id, file_name, file_path, file_type, file_size, uploaded_by)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(
       clientId,
