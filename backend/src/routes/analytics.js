@@ -55,39 +55,61 @@ router.get('/', authenticateToken, (req, res) => {
     const whereClause = teleproFilter && dateCondition ? `${teleproFilter} ${dateCondition}` : (teleproFilter || dateCondition || '');
 
     // Get total counts with date filtering
-    const totalClients = db.prepare(`SELECT COUNT(*) as count FROM clients ${whereClause}`).get(...params).count;
+    // NOTE: totalClients compte les CLIENTS UNIQUES (client_base)
+    // Pour les produits, on compte les entrées dans clients_produits
+    const totalClientsQuery = isAdmin
+      ? `SELECT COUNT(DISTINCT cb.id) as count FROM client_base cb`
+      : `SELECT COUNT(DISTINCT cp.client_base_id) as count
+         FROM clients_produits cp
+         WHERE cp.assigned_to = ?`;
 
-    // Distribution par statut
+    const totalClients = db.prepare(totalClientsQuery).get(...(isAdmin ? [] : [userId])).count;
+
+    // Total produits (peut être > totalClients si multi-produits)
+    const totalProduitsQuery = isAdmin
+      ? `SELECT COUNT(*) as count FROM clients_produits`
+      : `SELECT COUNT(*) as count FROM clients_produits WHERE assigned_to = ?`;
+
+    const totalProduits = db.prepare(totalProduitsQuery).get(...(isAdmin ? [] : [userId])).count;
+
+    // Distribution par statut (au niveau PRODUIT)
     const statutsDistribution = db.prepare(`
-      SELECT statut, COUNT(*) as count
-      FROM clients
-      ${whereClause}
-      GROUP BY statut
-    `).all(...params);
+      SELECT cp.statut, COUNT(*) as count
+      FROM clients_produits cp
+      ${teleproFilter.replace('assigned_to', 'cp.assigned_to')}
+      GROUP BY cp.statut
+    `).all(...teleproParams);
 
     // Distribution par produit
     const produitsDistribution = db.prepare(`
-      SELECT type_produit, COUNT(*) as count
-      FROM clients
-      ${whereClause}
-      GROUP BY type_produit
-    `).all(...params);
+      SELECT cp.type_produit, COUNT(*) as count
+      FROM clients_produits cp
+      ${teleproFilter.replace('assigned_to', 'cp.assigned_to')}
+      GROUP BY cp.type_produit
+    `).all(...teleproParams);
 
-    // Clients created over time
+    // Produits créés au fil du temps
     const clientsOverTime = db.prepare(`
-      SELECT DATE(created_at) as date, COUNT(*) as count
-      FROM clients
-      ${whereClause}
-      GROUP BY DATE(created_at)
+      SELECT DATE(cp.created_at) as date, COUNT(*) as count
+      FROM clients_produits cp
+      ${teleproFilter.replace('assigned_to', 'cp.assigned_to')}
+      GROUP BY DATE(cp.created_at)
       ORDER BY date ASC
-    `).all(...params);
+    `).all(...teleproParams);
 
-    // Recent activity
+    // Recent activity (JOIN avec client_base pour avoir societe + nom_signataire)
     const recentClients = db.prepare(`
-      SELECT id, societe, nom_signataire, type_produit, statut, created_at
-      FROM clients
-      ${teleproFilter}
-      ORDER BY created_at DESC
+      SELECT
+        cb.id,
+        cb.societe,
+        cb.nom_signataire,
+        cp.type_produit,
+        cp.statut,
+        cp.created_at
+      FROM clients_produits cp
+      INNER JOIN client_base cb ON cp.client_base_id = cb.id
+      ${teleproFilter.replace('assigned_to', 'cp.assigned_to')}
+      ORDER BY cp.created_at DESC
       LIMIT 10
     `).all(...teleproParams);
 
@@ -101,10 +123,10 @@ router.get('/', authenticateToken, (req, res) => {
         SELECT
           users.id,
           users.username,
-          COUNT(clients.id) as client_count,
-          COUNT(CASE WHEN clients.statut = 'termine' THEN 1 END) as termine_count
+          COUNT(cp.id) as client_count,
+          COUNT(CASE WHEN cp.statut = 'termine' THEN 1 END) as termine_count
         FROM users
-        LEFT JOIN clients ON users.id = clients.assigned_to
+        LEFT JOIN clients_produits cp ON users.id = cp.assigned_to
         WHERE users.role = 'telepro'
         GROUP BY users.id, users.username
         ORDER BY client_count DESC
@@ -113,14 +135,14 @@ router.get('/', authenticateToken, (req, res) => {
       // Stats mensuelles par télépro (12 derniers mois)
       const monthlyData = db.prepare(`
         SELECT
-          strftime('%Y-%m', clients.created_at) as month,
+          strftime('%Y-%m', cp.created_at) as month,
           users.username,
           COUNT(*) as count
-        FROM clients
-        LEFT JOIN users ON clients.assigned_to = users.id
+        FROM clients_produits cp
+        LEFT JOIN users ON cp.assigned_to = users.id
         WHERE users.role = 'telepro'
-          AND clients.assigned_to IS NOT NULL
-          AND clients.created_at >= date('now', '-12 months')
+          AND cp.assigned_to IS NOT NULL
+          AND cp.created_at >= date('now', '-12 months')
         GROUP BY month, users.id, users.username
         ORDER BY month ASC
       `).all();
@@ -147,15 +169,15 @@ router.get('/', authenticateToken, (req, res) => {
       // Taux de conversion par télépro par mois
       const conversionData = db.prepare(`
         SELECT
-          strftime('%Y-%m', clients.created_at) as month,
+          strftime('%Y-%m', cp.created_at) as month,
           users.username,
           COUNT(*) as total,
-          COUNT(CASE WHEN clients.statut = 'termine' THEN 1 END) as termine
-        FROM clients
-        LEFT JOIN users ON clients.assigned_to = users.id
+          COUNT(CASE WHEN cp.statut = 'termine' THEN 1 END) as termine
+        FROM clients_produits cp
+        LEFT JOIN users ON cp.assigned_to = users.id
         WHERE users.role = 'telepro'
-          AND clients.assigned_to IS NOT NULL
-          AND clients.created_at >= date('now', '-12 months')
+          AND cp.assigned_to IS NOT NULL
+          AND cp.created_at >= date('now', '-12 months')
         GROUP BY month, users.id, users.username
         ORDER BY month ASC
       `).all();
@@ -184,7 +206,8 @@ router.get('/', authenticateToken, (req, res) => {
 
     res.json({
       summary: {
-        totalClients,
+        totalClients,      // Nombre de clients uniques (client_base)
+        totalProduits,     // Nombre total de produits (peut être >= totalClients)
         par_statut: statutsDistribution,
         par_produit: produitsDistribution
       },

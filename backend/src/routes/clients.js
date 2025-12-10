@@ -4,77 +4,147 @@ const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Récupérer les clients (filtrage selon le rôle)
+/**
+ * ARCHITECTURE MULTI-PRODUITS
+ *
+ * Un client peut avoir 1, 2 ou 3 produits (destratification, pression, matelas_isolants)
+ *
+ * Tables:
+ * - client_base: Données communes (société, contacts, SIRET...)
+ * - clients_produits: Données spécifiques par produit (type, données techniques, statut, assignation)
+ * - client_comments, client_appointments, client_documents: Liés à client_base_id (partagés)
+ */
+
+// ============================================
+// ROUTES PRINCIPALES - LISTE ET DÉTAIL
+// ============================================
+
+// GET /clients - Liste des clients avec leurs produits
 router.get('/', authenticateToken, (req, res) => {
   try {
     const { page = 1, limit = 20, search, statut, type_produit, code_naf, code_postal } = req.query;
     const offset = (page - 1) * limit;
 
-    let query = 'SELECT clients.*, users.username as assigned_username FROM clients LEFT JOIN users ON clients.assigned_to = users.id';
-    let countQuery = 'SELECT COUNT(*) as total FROM clients';
+    // Requête avec JOIN entre client_base et clients_produits
+    let query = `
+      SELECT
+        cb.id as client_base_id,
+        cb.societe, cb.adresse, cb.code_postal, cb.telephone, cb.siret,
+        cb.nom_site, cb.adresse_travaux, cb.code_postal_travaux,
+        cb.nom_signataire, cb.fonction, cb.telephone_signataire, cb.mail_signataire,
+        cb.nom_contact_site, cb.prenom_contact_site, cb.fonction_contact_site,
+        cb.mail_contact_site, cb.telephone_contact_site,
+        cb.code_naf, cb.donnees_enrichies,
+        cb.created_at, cb.updated_at,
+        cp.id as produit_id,
+        cp.type_produit,
+        cp.donnees_techniques,
+        cp.statut,
+        cp.assigned_to,
+        u.username as assigned_username
+      FROM client_base cb
+      INNER JOIN clients_produits cp ON cb.id = cp.client_base_id
+      LEFT JOIN users u ON cp.assigned_to = u.id
+    `;
+
+    let countQuery = `
+      SELECT COUNT(DISTINCT cb.id) as total
+      FROM client_base cb
+      INNER JOIN clients_produits cp ON cb.id = cp.client_base_id
+    `;
+
     let params = [];
     let conditions = [];
 
-    // Si télépro, voir seulement ses clients
+    // Si télépro, voir seulement ses produits
     if (req.user.role === 'telepro') {
-      conditions.push('assigned_to = ?');
+      conditions.push('cp.assigned_to = ?');
       params.push(req.user.id);
     }
 
-    // Filtrer par statut
+    // Filtrer par statut (au niveau produit)
     if (statut) {
-      conditions.push('statut = ?');
+      conditions.push('cp.statut = ?');
       params.push(statut);
     }
 
     // Filtrer par type de produit
     if (type_produit) {
-      conditions.push('type_produit = ?');
+      conditions.push('cp.type_produit = ?');
       params.push(type_produit);
     }
 
-    // Filtrer par code NAF
+    // Filtrer par code NAF (au niveau client_base)
     if (code_naf) {
-      conditions.push('code_naf LIKE ?');
+      conditions.push('cb.code_naf LIKE ?');
       params.push(`%${code_naf}%`);
     }
 
-    // Filtrer par code postal
+    // Filtrer par code postal (au niveau client_base)
     if (code_postal) {
-      conditions.push('code_postal LIKE ?');
+      conditions.push('cb.code_postal LIKE ?');
       params.push(`%${code_postal}%`);
     }
 
-    // Recherche par société, téléphone, adresse, nom signataire, SIRET
+    // Recherche globale
     if (search) {
-      conditions.push('(societe LIKE ? OR telephone LIKE ? OR adresse LIKE ? OR nom_signataire LIKE ? OR siret LIKE ?)');
+      conditions.push('(cb.societe LIKE ? OR cb.telephone LIKE ? OR cb.adresse LIKE ? OR cb.nom_signataire LIKE ? OR cb.siret LIKE ?)');
       const searchTerm = `%${search}%`;
       params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
+    // Ajouter WHERE si conditions
     if (conditions.length > 0) {
-      query += ' WHERE ' + conditions.join(' AND ');
-      countQuery += ' WHERE ' + conditions.join(' AND ');
+      const whereClause = ' WHERE ' + conditions.join(' AND ');
+      query += whereClause;
+      countQuery += whereClause;
     }
 
-    query += ' ORDER BY updated_at DESC LIMIT ? OFFSET ?';
+    // Tri et pagination
+    query += ' ORDER BY cb.updated_at DESC, cp.type_produit ASC LIMIT ? OFFSET ?';
 
-    const clients = db.prepare(query).all(...params, parseInt(limit), offset);
+    const results = db.prepare(query).all(...params, parseInt(limit), offset);
     const total = db.prepare(countQuery).get(...params).total;
 
-    // Parse les données techniques JSON pour chaque client
-    const clientsWithParsedData = clients.map(client => ({
-      ...client,
-      donnees_techniques: client.donnees_techniques ? JSON.parse(client.donnees_techniques) : null
+    // Parser les données JSON
+    const clients = results.map(row => ({
+      id: row.client_base_id,
+      produit_id: row.produit_id,
+      societe: row.societe,
+      adresse: row.adresse,
+      code_postal: row.code_postal,
+      telephone: row.telephone,
+      siret: row.siret,
+      nom_site: row.nom_site,
+      adresse_travaux: row.adresse_travaux,
+      code_postal_travaux: row.code_postal_travaux,
+      nom_signataire: row.nom_signataire,
+      fonction: row.fonction,
+      telephone_signataire: row.telephone_signataire,
+      mail_signataire: row.mail_signataire,
+      nom_contact_site: row.nom_contact_site,
+      prenom_contact_site: row.prenom_contact_site,
+      fonction_contact_site: row.fonction_contact_site,
+      mail_contact_site: row.mail_contact_site,
+      telephone_contact_site: row.telephone_contact_site,
+      code_naf: row.code_naf,
+      type_produit: row.type_produit,
+      statut: row.statut,
+      assigned_to: row.assigned_to,
+      assigned_username: row.assigned_username,
+      donnees_techniques: row.donnees_techniques ? JSON.parse(row.donnees_techniques) : null,
+      donnees_enrichies: row.donnees_enrichies ? JSON.parse(row.donnees_enrichies) : null,
+      created_at: row.created_at,
+      updated_at: row.updated_at
     }));
 
-    // Si c'est une recherche, retourner directement le tableau
+    // Si recherche, retourner directement le tableau
     if (search) {
-      return res.json(clientsWithParsedData);
+      return res.json(clients);
     }
 
     res.json({
-      clients: clientsWithParsedData,
+      clients,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -83,198 +153,373 @@ router.get('/', authenticateToken, (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Erreur GET /clients:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Récupérer un client par ID
+// GET /clients/:id - Détail d'un client avec TOUS ses produits
 router.get('/:id', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
-    const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(id);
 
-    if (!client) {
+    // Récupérer client_base
+    const clientBase = db.prepare('SELECT * FROM client_base WHERE id = ?').get(id);
+    if (!clientBase) {
       return res.status(404).json({ error: 'Client non trouvé' });
     }
 
-    // Parse les données techniques JSON
-    if (client.donnees_techniques) {
-      client.donnees_techniques = JSON.parse(client.donnees_techniques);
-    }
+    // Récupérer tous les produits
+    const produits = db.prepare(`
+      SELECT cp.*, u.username as assigned_username
+      FROM clients_produits cp
+      LEFT JOIN users u ON cp.assigned_to = u.id
+      WHERE cp.client_base_id = ?
+      ORDER BY cp.type_produit ASC
+    `).all(id);
 
-    res.json(client);
+    // Parser JSON
+    produits.forEach(p => {
+      if (p.donnees_techniques) {
+        p.donnees_techniques = JSON.parse(p.donnees_techniques);
+      }
+    });
+
+    res.json({
+      ...clientBase,
+      donnees_enrichies: clientBase.donnees_enrichies ? JSON.parse(clientBase.donnees_enrichies) : null,
+      produits // Array de produits
+    });
   } catch (error) {
+    console.error('Erreur GET /clients/:id:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Créer un client
+// ============================================
+// CRÉATION ET MODIFICATION
+// ============================================
+
+// POST /clients - Créer un client avec un ou plusieurs produits
 router.post('/', authenticateToken, (req, res) => {
   try {
     const {
-      // Bénéficiaire
+      // Données communes
       societe, adresse, code_postal, telephone, siret,
-      // Site Travaux
       nom_site, adresse_travaux, code_postal_travaux,
-      // Contact Signataire
       nom_signataire, fonction, telephone_signataire, mail_signataire,
-      // Contact sur Site
-      nom_contact_site, prenom_contact_site, fonction_contact_site, mail_contact_site, telephone_contact_site,
-      // Produit et données
-      type_produit, donnees_techniques,
-      // Code NAF
-      code_naf
+      nom_contact_site, prenom_contact_site, fonction_contact_site,
+      mail_contact_site, telephone_contact_site,
+      code_naf,
+      // Produits (array ou objet unique pour rétrocompatibilité)
+      produits,
+      type_produit, // Ancienne API (single product)
+      donnees_techniques // Ancienne API
     } = req.body;
 
-    if (!type_produit) {
-      return res.status(400).json({ error: 'Type de produit requis' });
+    // Support ancien format (single product) ET nouveau format (multi-products)
+    let produitsArray;
+    if (produits && Array.isArray(produits) && produits.length > 0) {
+      // Nouveau format multi-produits
+      produitsArray = produits;
+    } else if (type_produit) {
+      // Ancien format (rétrocompatibilité)
+      produitsArray = [{
+        type_produit,
+        donnees_techniques: donnees_techniques || {}
+      }];
+    } else {
+      return res.status(400).json({ error: 'Au moins un produit requis (produits[] ou type_produit)' });
     }
 
-    // Stringify les données techniques si présentes
-    const donneesJSON = donnees_techniques ? JSON.stringify(donnees_techniques) : null;
-
-    const result = db.prepare(`
-      INSERT INTO clients (
+    // Créer client_base
+    const baseResult = db.prepare(`
+      INSERT INTO client_base (
         societe, adresse, code_postal, telephone, siret,
         nom_site, adresse_travaux, code_postal_travaux,
         nom_signataire, fonction, telephone_signataire, mail_signataire,
-        nom_contact_site, prenom_contact_site, fonction_contact_site, mail_contact_site, telephone_contact_site,
-        type_produit, donnees_techniques, code_naf,
-        assigned_to
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        nom_contact_site, prenom_contact_site, fonction_contact_site,
+        mail_contact_site, telephone_contact_site,
+        code_naf
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       societe, adresse, code_postal, telephone, siret,
       nom_site, adresse_travaux, code_postal_travaux,
       nom_signataire, fonction, telephone_signataire, mail_signataire,
-      nom_contact_site, prenom_contact_site, fonction_contact_site, mail_contact_site, telephone_contact_site,
-      type_produit, donneesJSON, code_naf,
-      req.user.id
+      nom_contact_site, prenom_contact_site, fonction_contact_site,
+      mail_contact_site, telephone_contact_site,
+      code_naf
     );
 
+    const clientBaseId = baseResult.lastInsertRowid;
+
+    // Créer chaque produit
+    const insertProduit = db.prepare(`
+      INSERT INTO clients_produits (
+        client_base_id, type_produit, donnees_techniques, statut, assigned_to
+      ) VALUES (?, ?, ?, ?, ?)
+    `);
+
+    const produitsInserted = [];
+    for (const produit of produitsArray) {
+      const result = insertProduit.run(
+        clientBaseId,
+        produit.type_produit,
+        produit.donnees_techniques ? JSON.stringify(produit.donnees_techniques) : null,
+        produit.statut || 'nouveau',
+        produit.assigned_to || req.user.id
+      );
+
+      produitsInserted.push({
+        id: result.lastInsertRowid,
+        type_produit: produit.type_produit
+      });
+    }
+
     res.status(201).json({
-      id: result.lastInsertRowid,
+      id: clientBaseId,
+      client_base_id: clientBaseId,
       societe,
-      type_produit,
-      nom_signataire,
-      statut: 'nouveau'
+      produits: produitsInserted
     });
   } catch (error) {
+    console.error('Erreur POST /clients:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Mettre à jour un client
+// PATCH /clients/:id - Modifier données COMMUNES d'un client
 router.patch('/:id', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
     const {
-      // Bénéficiaire
+      // Données communes
       societe, adresse, code_postal, telephone, siret,
-      // Site Travaux
       nom_site, adresse_travaux, code_postal_travaux,
-      // Contact Signataire
       nom_signataire, fonction, telephone_signataire, mail_signataire,
-      // Contact sur Site
-      nom_contact_site, prenom_contact_site, fonction_contact_site, mail_contact_site, telephone_contact_site,
-      // Produit et données
-      type_produit, donnees_techniques,
-      // Code NAF
-      code_naf,
-      // Statut
-      statut
+      nom_contact_site, prenom_contact_site, fonction_contact_site,
+      mail_contact_site, telephone_contact_site,
+      code_naf
     } = req.body;
 
     const updates = [];
     const params = [];
 
-    // Bénéficiaire
+    // Construire UPDATE dynamique
     if (societe !== undefined) { updates.push('societe = ?'); params.push(societe); }
     if (adresse !== undefined) { updates.push('adresse = ?'); params.push(adresse); }
     if (code_postal !== undefined) { updates.push('code_postal = ?'); params.push(code_postal); }
     if (telephone !== undefined) { updates.push('telephone = ?'); params.push(telephone); }
     if (siret !== undefined) { updates.push('siret = ?'); params.push(siret); }
-
-    // Site Travaux
     if (nom_site !== undefined) { updates.push('nom_site = ?'); params.push(nom_site); }
     if (adresse_travaux !== undefined) { updates.push('adresse_travaux = ?'); params.push(adresse_travaux); }
     if (code_postal_travaux !== undefined) { updates.push('code_postal_travaux = ?'); params.push(code_postal_travaux); }
-
-    // Contact Signataire
     if (nom_signataire !== undefined) { updates.push('nom_signataire = ?'); params.push(nom_signataire); }
     if (fonction !== undefined) { updates.push('fonction = ?'); params.push(fonction); }
     if (telephone_signataire !== undefined) { updates.push('telephone_signataire = ?'); params.push(telephone_signataire); }
     if (mail_signataire !== undefined) { updates.push('mail_signataire = ?'); params.push(mail_signataire); }
-
-    // Contact sur Site
     if (nom_contact_site !== undefined) { updates.push('nom_contact_site = ?'); params.push(nom_contact_site); }
     if (prenom_contact_site !== undefined) { updates.push('prenom_contact_site = ?'); params.push(prenom_contact_site); }
     if (fonction_contact_site !== undefined) { updates.push('fonction_contact_site = ?'); params.push(fonction_contact_site); }
     if (mail_contact_site !== undefined) { updates.push('mail_contact_site = ?'); params.push(mail_contact_site); }
     if (telephone_contact_site !== undefined) { updates.push('telephone_contact_site = ?'); params.push(telephone_contact_site); }
+    if (code_naf !== undefined) { updates.push('code_naf = ?'); params.push(code_naf); }
 
-    // Produit et données
-    if (type_produit !== undefined) { updates.push('type_produit = ?'); params.push(type_produit); }
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'Aucune donnée commune à mettre à jour' });
+    }
+
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+    params.push(id);
+
+    db.prepare(`UPDATE client_base SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+
+    // Retourner le client mis à jour
+    const client = db.prepare('SELECT * FROM client_base WHERE id = ?').get(id);
+    if (client.donnees_enrichies) {
+      client.donnees_enrichies = JSON.parse(client.donnees_enrichies);
+    }
+
+    res.json(client);
+  } catch (error) {
+    console.error('Erreur PATCH /clients/:id:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /clients/produits/:produitId - Modifier données SPÉCIFIQUES d'un produit
+router.patch('/produits/:produitId', authenticateToken, (req, res) => {
+  try {
+    const { produitId } = req.params;
+    const { donnees_techniques, statut, assigned_to } = req.body;
+
+    const updates = [];
+    const params = [];
+
     if (donnees_techniques !== undefined) {
       updates.push('donnees_techniques = ?');
       params.push(JSON.stringify(donnees_techniques));
     }
-
-    // Code NAF
-    if (code_naf !== undefined) { updates.push('code_naf = ?'); params.push(code_naf); }
-
-    // Statut
-    if (statut !== undefined) { updates.push('statut = ?'); params.push(statut); }
+    if (statut !== undefined) {
+      updates.push('statut = ?');
+      params.push(statut);
+    }
+    if (assigned_to !== undefined) {
+      updates.push('assigned_to = ?');
+      params.push(assigned_to);
+    }
 
     if (updates.length === 0) {
       return res.status(400).json({ error: 'Aucune donnée à mettre à jour' });
     }
 
     updates.push('updated_at = CURRENT_TIMESTAMP');
-    params.push(id);
+    params.push(produitId);
 
-    db.prepare(`UPDATE clients SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+    db.prepare(`UPDATE clients_produits SET ${updates.join(', ')} WHERE id = ?`).run(...params);
 
-    const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(id);
-
-    // Parse les données techniques
-    if (client.donnees_techniques) {
-      client.donnees_techniques = JSON.parse(client.donnees_techniques);
+    const produit = db.prepare('SELECT * FROM clients_produits WHERE id = ?').get(produitId);
+    if (produit.donnees_techniques) {
+      produit.donnees_techniques = JSON.parse(produit.donnees_techniques);
     }
 
-    res.json(client);
+    res.json(produit);
   } catch (error) {
+    console.error('Erreur PATCH /produits/:produitId:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Supprimer un client
+// POST /clients/:id/produits - Ajouter un produit à un client existant
+router.post('/:id/produits', authenticateToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type_produit, donnees_techniques } = req.body;
+
+    if (!type_produit) {
+      return res.status(400).json({ error: 'type_produit requis' });
+    }
+
+    // Vérifier que le client existe
+    const clientBase = db.prepare('SELECT id FROM client_base WHERE id = ?').get(id);
+    if (!clientBase) {
+      return res.status(404).json({ error: 'Client non trouvé' });
+    }
+
+    // Vérifier que ce produit n'existe pas déjà
+    const existing = db.prepare(`
+      SELECT id FROM clients_produits
+      WHERE client_base_id = ? AND type_produit = ?
+    `).get(id, type_produit);
+
+    if (existing) {
+      return res.status(400).json({
+        error: 'Ce client possède déjà ce produit'
+      });
+    }
+
+    // Insérer le nouveau produit
+    const result = db.prepare(`
+      INSERT INTO clients_produits (
+        client_base_id, type_produit, donnees_techniques, statut, assigned_to
+      ) VALUES (?, ?, ?, 'nouveau', ?)
+    `).run(
+      id,
+      type_produit,
+      donnees_techniques ? JSON.stringify(donnees_techniques) : null,
+      req.user.id
+    );
+
+    res.status(201).json({
+      id: result.lastInsertRowid,
+      client_base_id: id,
+      type_produit,
+      message: 'Produit ajouté avec succès'
+    });
+  } catch (error) {
+    console.error('Erreur POST /produits:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// SUPPRESSION
+// ============================================
+
+// DELETE /clients/produits/:produitId - Supprimer UN produit (pas le client)
+router.delete('/produits/:produitId', authenticateToken, (req, res) => {
+  try {
+    const { produitId } = req.params;
+
+    // Vérifier combien de produits le client possède
+    const produit = db.prepare(`
+      SELECT client_base_id FROM clients_produits WHERE id = ?
+    `).get(produitId);
+
+    if (!produit) {
+      return res.status(404).json({ error: 'Produit non trouvé' });
+    }
+
+    const count = db.prepare(`
+      SELECT COUNT(*) as count FROM clients_produits
+      WHERE client_base_id = ?
+    `).get(produit.client_base_id);
+
+    if (count.count === 1) {
+      return res.status(400).json({
+        error: 'Impossible de supprimer le dernier produit. Supprimez le client entier.'
+      });
+    }
+
+    db.prepare('DELETE FROM clients_produits WHERE id = ?').run(produitId);
+
+    res.json({ message: 'Produit supprimé' });
+  } catch (error) {
+    console.error('Erreur DELETE /produits/:produitId:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /clients/:id - Supprimer client ET tous ses produits (CASCADE)
 router.delete('/:id', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
-    db.prepare('DELETE FROM clients WHERE id = ?').run(id);
-    res.json({ message: 'Client supprimé' });
+
+    // CASCADE DELETE supprimera automatiquement:
+    // - clients_produits (FK client_base_id)
+    // - client_comments (FK client_base_id)
+    // - client_appointments (FK client_base_id)
+    // - client_documents (FK client_base_id)
+
+    db.prepare('DELETE FROM client_base WHERE id = ?').run(id);
+
+    res.json({ message: 'Client et tous ses produits supprimés' });
   } catch (error) {
+    console.error('Erreur DELETE /clients/:id:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Routes pour les commentaires des clients
+// ============================================
+// COMMENTAIRES (partagés entre produits)
+// ============================================
+
 router.get('/:id/comments', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
 
     // Validate client exists
-    const clientExists = db.prepare('SELECT id FROM clients WHERE id = ?').get(parseInt(id));
+    const clientExists = db.prepare('SELECT id FROM client_base WHERE id = ?').get(parseInt(id));
     if (!clientExists) {
       return res.status(404).json({ error: 'Client non trouvé' });
     }
 
     const comments = db.prepare(`
-      SELECT client_comments.*, users.username
-      FROM client_comments
-      LEFT JOIN users ON client_comments.user_id = users.id
-      WHERE client_id = ?
-      ORDER BY created_at DESC
+      SELECT cc.*, u.username
+      FROM client_comments cc
+      LEFT JOIN users u ON cc.user_id = u.id
+      WHERE cc.client_base_id = ?
+      ORDER BY cc.created_at DESC
     `).all(parseInt(id));
 
     res.json(comments);
@@ -298,12 +543,12 @@ router.post('/:id/comments', authenticateToken, (req, res) => {
     }
 
     const result = db.prepare(
-      'INSERT INTO client_comments (client_id, user_id, content) VALUES (?, ?, ?)'
+      'INSERT INTO client_comments (client_base_id, user_id, content) VALUES (?, ?, ?)'
     ).run(parseInt(id), req.user.id, content.trim());
 
     res.status(201).json({
       id: result.lastInsertRowid,
-      client_id: parseInt(id),
+      client_base_id: parseInt(id),
       user_id: req.user.id,
       content: content.trim(),
       created_at: new Date().toISOString()
@@ -318,7 +563,6 @@ router.delete('/:id/comments/:commentId', authenticateToken, (req, res) => {
   try {
     const { commentId } = req.params;
 
-    // Verify comment exists before deleting
     const comment = db.prepare('SELECT id FROM client_comments WHERE id = ?').get(parseInt(commentId));
     if (!comment) {
       return res.status(404).json({ error: 'Commentaire non trouvé' });
@@ -332,15 +576,18 @@ router.delete('/:id/comments/:commentId', authenticateToken, (req, res) => {
   }
 });
 
-// Routes pour les rendez-vous des clients
+// ============================================
+// RENDEZ-VOUS (partagés entre produits)
+// ============================================
+
 router.get('/:id/appointments', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
     const appointments = db.prepare(`
-      SELECT client_appointments.*, users.username
-      FROM client_appointments
-      LEFT JOIN users ON client_appointments.user_id = users.id
-      WHERE client_id = ?
+      SELECT ca.*, u.username
+      FROM client_appointments ca
+      LEFT JOIN users u ON ca.user_id = u.id
+      WHERE ca.client_base_id = ?
       ORDER BY date ASC, time ASC
     `).all(id);
 
@@ -360,12 +607,12 @@ router.post('/:id/appointments', authenticateToken, (req, res) => {
     }
 
     const result = db.prepare(
-      'INSERT INTO client_appointments (client_id, user_id, title, date, time) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO client_appointments (client_base_id, user_id, title, date, time) VALUES (?, ?, ?, ?, ?)'
     ).run(id, req.user.id, title, date, time);
 
     res.status(201).json({
       id: result.lastInsertRowid,
-      client_id: id,
+      client_base_id: id,
       user_id: req.user.id,
       title,
       date,
@@ -386,7 +633,11 @@ router.delete('/:id/appointments/:appointmentId', authenticateToken, (req, res) 
   }
 });
 
-// Import CSV
+// ============================================
+// IMPORT/EXPORT
+// ============================================
+
+// Import CSV (rétrocompat: crée 1 produit par défaut)
 router.post('/import/csv', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const multer = require('multer');
@@ -410,13 +661,15 @@ router.post('/import/csv', authenticateToken, requireAdmin, async (req, res) => 
 
           for (const row of results) {
             try {
-              const stmt = db.prepare(`
-                INSERT INTO clients (societe, adresse, code_postal, telephone, siret, nom_site, adresse_travaux, code_postal_travaux,
-                                     nom_signataire, fonction, telephone_signataire, mail_signataire, type_produit, code_naf, statut, assigned_to)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-              `);
-
-              stmt.run(
+              // Créer client_base
+              const baseResult = db.prepare(`
+                INSERT INTO client_base (
+                  societe, adresse, code_postal, telephone, siret,
+                  nom_site, adresse_travaux, code_postal_travaux,
+                  nom_signataire, fonction, telephone_signataire, mail_signataire,
+                  code_naf
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `).run(
                 row.societe || null,
                 row.adresse || null,
                 row.code_postal || null,
@@ -429,8 +682,19 @@ router.post('/import/csv', authenticateToken, requireAdmin, async (req, res) => 
                 row.fonction || null,
                 row.telephone_signataire || null,
                 row.mail_signataire || null,
+                row.code_naf || null
+              );
+
+              const clientBaseId = baseResult.lastInsertRowid;
+
+              // Créer 1 produit par défaut
+              db.prepare(`
+                INSERT INTO clients_produits (
+                  client_base_id, type_produit, statut, assigned_to
+                ) VALUES (?, ?, ?, ?)
+              `).run(
+                clientBaseId,
                 row.type_produit || 'destratification',
-                row.code_naf || null,
                 row.statut || 'nouveau',
                 req.user.id
               );
@@ -441,7 +705,6 @@ router.post('/import/csv', authenticateToken, requireAdmin, async (req, res) => 
             }
           }
 
-          // Supprimer le fichier temporaire
           fs.unlinkSync(filePath);
 
           res.json({ message: 'Import réussi', imported });
@@ -453,18 +716,24 @@ router.post('/import/csv', authenticateToken, requireAdmin, async (req, res) => 
   }
 });
 
-// Exporter les clients en Excel
+// Export Excel (1 ligne par produit)
 router.get('/export/excel', authenticateToken, async (req, res) => {
   try {
     const ExcelJS = require('exceljs');
 
-    let query = 'SELECT clients.*, users.username as assigned_username FROM clients LEFT JOIN users ON clients.assigned_to = users.id';
+    let query = `
+      SELECT
+        cb.*, cp.type_produit, cp.statut, cp.assigned_to, u.username as assigned_username
+      FROM client_base cb
+      INNER JOIN clients_produits cp ON cb.id = cp.client_base_id
+      LEFT JOIN users u ON cp.assigned_to = u.id
+    `;
     let params = [];
     let conditions = [];
 
-    // Si télépro, voir seulement ses clients
+    // Si télépro, voir seulement ses produits
     if (req.user.role === 'telepro') {
-      conditions.push('assigned_to = ?');
+      conditions.push('cp.assigned_to = ?');
       params.push(req.user.id);
     }
 
@@ -472,14 +741,12 @@ router.get('/export/excel', authenticateToken, async (req, res) => {
       query += ' WHERE ' + conditions.join(' AND ');
     }
 
-    query += ' ORDER BY updated_at DESC';
+    query += ' ORDER BY cb.updated_at DESC, cp.type_produit ASC';
     const clients = db.prepare(query).all(...params);
 
-    // Créer un nouveau classeur Excel
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Clients');
 
-    // Définir les colonnes avec formatage - NOUVELLE STRUCTURE
     worksheet.columns = [
       { header: 'ID', key: 'id', width: 8 },
       { header: 'Société', key: 'societe', width: 25 },
@@ -487,31 +754,19 @@ router.get('/export/excel', authenticateToken, async (req, res) => {
       { header: 'Code Postal', key: 'code_postal', width: 12 },
       { header: 'Téléphone', key: 'telephone', width: 15 },
       { header: 'SIRET', key: 'siret', width: 18 },
-      { header: 'Nom Site', key: 'nom_site', width: 25 },
-      { header: 'Adresse Travaux', key: 'adresse_travaux', width: 30 },
-      { header: 'CP Travaux', key: 'code_postal_travaux', width: 12 },
-      { header: 'Signataire', key: 'nom_signataire', width: 20 },
-      { header: 'Fonction', key: 'fonction', width: 15 },
-      { header: 'Tél Signataire', key: 'telephone_signataire', width: 15 },
-      { header: 'Email Signataire', key: 'mail_signataire', width: 25 },
       { header: 'Produit', key: 'type_produit', width: 18 },
-      { header: 'Code NAF', key: 'code_naf', width: 12 },
       { header: 'Statut', key: 'statut', width: 18 },
       { header: 'Assigné à', key: 'assigned_username', width: 20 },
       { header: 'Date création', key: 'created_at', width: 20 }
     ];
 
-    // Styler la ligne d'en-tête
     worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
     worksheet.getRow(1).fill = {
       type: 'pattern',
       pattern: 'solid',
       fgColor: { argb: 'FF4F81BD' }
     };
-    worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
-    worksheet.getRow(1).height = 25;
 
-    // Ajouter les données avec formatage conditionnel
     clients.forEach((client, index) => {
       const row = worksheet.addRow({
         ...client,
@@ -519,7 +774,6 @@ router.get('/export/excel', authenticateToken, async (req, res) => {
         assigned_username: client.assigned_username || 'Non assigné'
       });
 
-      // Alternance de couleurs pour les lignes
       if (index % 2 === 0) {
         row.fill = {
           type: 'pattern',
@@ -527,28 +781,10 @@ router.get('/export/excel', authenticateToken, async (req, res) => {
           fgColor: { argb: 'FFF0F0F0' }
         };
       }
-
-      // Bordures pour toutes les cellules
-      row.eachCell({ includeEmpty: true }, (cell) => {
-        cell.border = {
-          top: { style: 'thin', color: { argb: 'FFD3D3D3' } },
-          left: { style: 'thin', color: { argb: 'FFD3D3D3' } },
-          bottom: { style: 'thin', color: { argb: 'FFD3D3D3' } },
-          right: { style: 'thin', color: { argb: 'FFD3D3D3' } }
-        };
-      });
     });
 
-    // Ajouter les filtres automatiques
-    worksheet.autoFilter = {
-      from: 'A1',
-      to: `R1`
-    };
-
-    // Générer le nom du fichier avec la date
     const filename = `clients_export_${new Date().toISOString().split('T')[0]}.xlsx`;
 
-    // Envoyer le fichier
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
@@ -561,54 +797,45 @@ router.get('/export/excel', authenticateToken, async (req, res) => {
   }
 });
 
-// Attribuer un client à un télépro (admin only)
+// ============================================
+// ATTRIBUTION
+// ============================================
+
+// Attribution d'un produit (admin only)
 router.patch('/:id/assign', authenticateToken, requireAdmin, (req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params; // produit_id
     const { userId } = req.body;
 
     if (!userId) {
       return res.status(400).json({ error: 'userId requis' });
     }
 
-    // Vérifier que le user existe et est un télépro ou admin
     const user = db.prepare('SELECT id, role FROM users WHERE id = ?').get(userId);
     if (!user) {
       return res.status(404).json({ error: 'Utilisateur non trouvé' });
     }
 
-    // Vérifier que le client existe
-    const client = db.prepare('SELECT id FROM clients WHERE id = ?').get(id);
-    if (!client) {
-      return res.status(404).json({ error: 'Client non trouvé' });
+    const produit = db.prepare('SELECT id FROM clients_produits WHERE id = ?').get(id);
+    if (!produit) {
+      return res.status(404).json({ error: 'Produit non trouvé' });
     }
 
-    // Mettre à jour l'attribution
-    db.prepare('UPDATE clients SET assigned_to = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    db.prepare('UPDATE clients_produits SET assigned_to = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
       .run(userId, id);
 
-    const updatedClient = db.prepare(`
-      SELECT c.*, u.username as assigned_username
-      FROM clients c
-      LEFT JOIN users u ON c.assigned_to = u.id
-      WHERE c.id = ?
-    `).get(id);
-
-    res.json({
-      message: 'Client attribué avec succès',
-      client: updatedClient
-    });
+    res.json({ message: 'Produit attribué avec succès' });
 
   } catch (error) {
-    console.error('Erreur attribution client:', error);
+    console.error('Erreur attribution:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Attribution en masse de clients (admin only)
+// Attribution en masse de produits (admin only)
 router.post('/bulk-assign', authenticateToken, requireAdmin, (req, res) => {
   try {
-    const { clientIds, userId } = req.body;
+    const { clientIds, userId } = req.body; // clientIds = produit_ids maintenant
 
     if (!clientIds || !Array.isArray(clientIds) || clientIds.length === 0) {
       return res.status(400).json({ error: 'clientIds requis (array non vide)' });
@@ -618,16 +845,15 @@ router.post('/bulk-assign', authenticateToken, requireAdmin, (req, res) => {
       return res.status(400).json({ error: 'userId requis' });
     }
 
-    // Vérifier que le user existe
     const user = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(userId);
     if (!user) {
       return res.status(404).json({ error: 'Utilisateur non trouvé' });
     }
 
-    // Préparer la requête d'update avec placeholders
+    // Update clients_produits (pas client_base)
     const placeholders = clientIds.map(() => '?').join(',');
     const updateQuery = `
-      UPDATE clients
+      UPDATE clients_produits
       SET assigned_to = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id IN (${placeholders})
     `;
@@ -635,7 +861,7 @@ router.post('/bulk-assign', authenticateToken, requireAdmin, (req, res) => {
     const result = db.prepare(updateQuery).run(userId, ...clientIds);
 
     res.json({
-      message: `${result.changes} client(s) attribué(s) avec succès`,
+      message: `${result.changes} produit(s) attribué(s) avec succès`,
       assignedTo: {
         id: user.id,
         username: user.username,
@@ -650,27 +876,35 @@ router.post('/bulk-assign', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
-// Dupliquer un client avec toutes ses données
+// ============================================
+// DUPLICATION (deprecated - utiliser POST /:id/produits à la place)
+// ============================================
+
+// Dupliquer un client (ancienne méthode - conservée pour rétrocompat)
+// RECOMMANDÉ: Utiliser POST /clients/:id/produits pour ajouter un produit
 router.post('/:id/duplicate', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
 
-    // Récupérer le client source
-    const sourceClient = db.prepare('SELECT * FROM clients WHERE id = ?').get(id);
+    // Récupérer le client_base
+    const sourceClient = db.prepare('SELECT * FROM client_base WHERE id = ?').get(id);
     if (!sourceClient) {
       return res.status(404).json({ error: 'Client non trouvé' });
     }
 
-    // Créer le nouveau client (copie complète sauf id, created_at, updated_at)
-    const newClientResult = db.prepare(`
-      INSERT INTO clients (
+    // Récupérer le premier produit pour copier son type
+    const sourceProduit = db.prepare('SELECT * FROM clients_produits WHERE client_base_id = ? LIMIT 1').get(id);
+
+    // Créer nouveau client_base (copie)
+    const newBaseResult = db.prepare(`
+      INSERT INTO client_base (
         societe, adresse, code_postal, telephone, siret,
         nom_site, adresse_travaux, code_postal_travaux,
         nom_signataire, fonction, telephone_signataire, mail_signataire,
-        nom_contact_site, prenom_contact_site, fonction_contact_site, mail_contact_site, telephone_contact_site,
-        type_produit, donnees_techniques, code_naf,
-        statut, assigned_to, donnees_enrichies
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        nom_contact_site, prenom_contact_site, fonction_contact_site,
+        mail_contact_site, telephone_contact_site,
+        code_naf, donnees_enrichies
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       `${sourceClient.societe} (copie)`,
       sourceClient.adresse,
@@ -689,73 +923,30 @@ router.post('/:id/duplicate', authenticateToken, (req, res) => {
       sourceClient.fonction_contact_site,
       sourceClient.mail_contact_site,
       sourceClient.telephone_contact_site,
-      sourceClient.type_produit,
-      sourceClient.donnees_techniques,
       sourceClient.code_naf,
-      'nouveau', // Statut réinitialisé
-      req.user.id, // Attribué à l'utilisateur courant
       sourceClient.donnees_enrichies
     );
 
-    const newClientId = newClientResult.lastInsertRowid;
+    const newClientBaseId = newBaseResult.lastInsertRowid;
 
-    // Copier les commentaires
-    const comments = db.prepare('SELECT * FROM client_comments WHERE client_id = ?').all(id);
-    const commentInsert = db.prepare(`
-      INSERT INTO client_comments (client_id, user_id, content, created_at)
-      VALUES (?, ?, ?, ?)
-    `);
-
-    for (const comment of comments) {
-      commentInsert.run(newClientId, comment.user_id, comment.content, comment.created_at);
-    }
-
-    // Copier les rendez-vous (ajuster les dates futures uniquement)
-    const appointments = db.prepare('SELECT * FROM client_appointments WHERE client_id = ?').all(id);
-    const appointmentInsert = db.prepare(`
-      INSERT INTO client_appointments (client_id, user_id, title, date, time, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-
-    for (const appt of appointments) {
-      const apptDate = new Date(appt.date);
-      const now = new Date();
-      // Copier seulement les RDV futurs
-      if (apptDate >= now) {
-        appointmentInsert.run(newClientId, appt.user_id, appt.title, appt.date, appt.time, appt.created_at);
-      }
-    }
-
-    // Copier les documents (références seulement, pas les fichiers physiques pour simplicité)
-    const documents = db.prepare('SELECT * FROM client_documents WHERE client_id = ?').all(id);
-    const documentInsert = db.prepare(`
-      INSERT INTO client_documents (client_id, file_name, file_path, file_type, file_size, uploaded_by, uploaded_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    for (const doc of documents) {
-      documentInsert.run(
-        newClientId,
-        doc.file_name,
-        doc.file_path, // Même fichier partagé
-        doc.file_type,
-        doc.file_size,
-        doc.uploaded_by,
-        doc.uploaded_at
+    // Créer 1 produit identique
+    if (sourceProduit) {
+      db.prepare(`
+        INSERT INTO clients_produits (
+          client_base_id, type_produit, donnees_techniques, statut, assigned_to
+        ) VALUES (?, ?, ?, 'nouveau', ?)
+      `).run(
+        newClientBaseId,
+        sourceProduit.type_produit,
+        sourceProduit.donnees_techniques,
+        req.user.id
       );
     }
 
-    // Récupérer le client créé
-    const newClient = db.prepare('SELECT * FROM clients WHERE id = ?').get(newClientId);
-
     res.status(201).json({
       message: 'Client dupliqué avec succès',
-      client: newClient,
-      copied: {
-        comments: comments.length,
-        appointments: appointments.filter(a => new Date(a.date) >= new Date()).length,
-        documents: documents.length
-      }
+      id: newClientBaseId,
+      client_base_id: newClientBaseId
     });
 
   } catch (error) {

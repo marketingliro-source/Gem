@@ -8,7 +8,7 @@ import styles from './ClientModal.module.css';
 const ClientModal = ({ client, onClose }) => {
   const { user } = useAuth();
   const isNew = !client;
-  
+
   const [activeTab, setActiveTab] = useState('info');
   const [loading, setLoading] = useState(false);
   const [documents, setDocuments] = useState([]);
@@ -26,6 +26,10 @@ const ClientModal = ({ client, onClose }) => {
   });
   const [previewDocument, setPreviewDocument] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+
+  // Multi-produits : stocker tous les produits du client
+  const [clientProduits, setClientProduits] = useState([]);
+  const [currentProduitId, setCurrentProduitId] = useState(client?.produit_id || null);
 
   const [formData, setFormData] = useState({
     // Bénéficiaire
@@ -93,6 +97,7 @@ const ClientModal = ({ client, onClose }) => {
 
   useEffect(() => {
     if (!isNew) {
+      fetchClientComplete();
       fetchDocuments();
       fetchComments();
       fetchAppointments();
@@ -102,6 +107,16 @@ const ClientModal = ({ client, onClose }) => {
     }
     fetchStatuts();
   }, []);
+
+  const fetchClientComplete = async () => {
+    try {
+      const response = await api.get(`/clients/${client.id}`);
+      // response.data contient { ...client_base, produits: [...] }
+      setClientProduits(response.data.produits || []);
+    } catch (error) {
+      console.error('Erreur chargement client complet:', error);
+    }
+  };
 
   const fetchStatuts = async () => {
     try {
@@ -227,15 +242,47 @@ const ClientModal = ({ client, onClose }) => {
         };
       }
 
-      const payload = {
-        ...formData,
-        donnees_techniques: donneesFinales
-      };
-
       if (isNew) {
+        // Créer nouveau client avec produit
+        const payload = {
+          ...formData,
+          donnees_techniques: donneesFinales
+        };
         await api.post('/clients', payload);
       } else {
-        await api.patch(`/clients/${client.id}`, payload);
+        // Édition : séparer données communes vs données produit
+        // 1. Sauvegarder données communes (client_base)
+        const commonData = {
+          societe: formData.societe,
+          adresse: formData.adresse,
+          code_postal: formData.code_postal,
+          telephone: formData.telephone,
+          siret: formData.siret,
+          nom_site: formData.nom_site,
+          adresse_travaux: formData.adresse_travaux,
+          code_postal_travaux: formData.code_postal_travaux,
+          nom_signataire: formData.nom_signataire,
+          fonction: formData.fonction,
+          telephone_signataire: formData.telephone_signataire,
+          mail_signataire: formData.mail_signataire,
+          nom_contact_site: formData.nom_contact_site,
+          prenom_contact_site: formData.prenom_contact_site,
+          fonction_contact_site: formData.fonction_contact_site,
+          mail_contact_site: formData.mail_contact_site,
+          telephone_contact_site: formData.telephone_contact_site,
+          code_naf: formData.code_naf
+        };
+        await api.patch(`/clients/${client.id}`, commonData);
+
+        // 2. Sauvegarder données produit spécifiques
+        if (currentProduitId) {
+          const produitData = {
+            type_produit: formData.type_produit,
+            donnees_techniques: donneesFinales,
+            statut: formData.statut
+          };
+          await api.patch(`/clients/produits/${currentProduitId}`, produitData);
+        }
       }
 
       onClose(true); // Refresh la liste
@@ -443,6 +490,10 @@ const ClientModal = ({ client, onClose }) => {
     setPreviewUrl(null);
   };
 
+  const getProduitObj = (type) => {
+    return PRODUITS.find(p => p.key === type) || PRODUITS[0];
+  };
+
   return (
     <div className={styles.overlay} onClick={() => onClose(false)}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -452,6 +503,43 @@ const ClientModal = ({ client, onClose }) => {
             <X size={24} />
           </button>
         </div>
+
+        {/* Encadré produits multiples */}
+        {!isNew && clientProduits.length > 1 && (
+          <div style={{
+            margin: '16px 24px',
+            padding: '12px',
+            background: 'rgba(59, 130, 246, 0.1)',
+            border: '1px solid rgba(59, 130, 246, 0.3)',
+            borderRadius: '8px'
+          }}>
+            <div style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '8px' }}>
+              <strong>Ce client a {clientProduits.length} produits :</strong>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {clientProduits.map(p => {
+                const produitObj = getProduitObj(p.type_produit);
+                const isCurrent = p.id === currentProduitId;
+                return (
+                  <span
+                    key={p.id}
+                    style={{
+                      padding: '4px 12px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      fontWeight: isCurrent ? '600' : '400',
+                      background: isCurrent ? produitObj.color : `${produitObj.color}30`,
+                      color: isCurrent ? '#fff' : produitObj.color,
+                      border: isCurrent ? `2px solid ${produitObj.color}` : 'none'
+                    }}
+                  >
+                    {produitObj.label} {isCurrent && '(en cours)'}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className={styles.tabs}>
           <button
