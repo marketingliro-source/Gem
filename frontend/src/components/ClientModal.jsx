@@ -314,14 +314,26 @@ const ClientModal = ({ client, onClose }) => {
             donnees_techniques: donneesFinales,
             statut: formData.statut
           };
-          await api.patch(`/clients/produits/${currentProduitId}`, produitData);
+
+          try {
+            await api.patch(`/clients/produits/${currentProduitId}`, produitData);
+          } catch (produitError) {
+            // Gérer erreur spécifique changement type_produit
+            if (produitError.response?.status === 400 && produitError.response?.data?.error?.includes('possède déjà')) {
+              alert(`❌ ${produitError.response.data.error}\n\nVous ne pouvez pas changer le type de produit car ce client possède déjà ce produit.\n\nSolution: Utilisez "Dupliquer" pour créer un nouveau client avec le produit souhaité.`);
+              throw produitError; // Bloquer la fermeture du modal
+            }
+            throw produitError;
+          }
         }
       }
 
       onClose(true); // Refresh la liste
     } catch (error) {
       console.error('Erreur sauvegarde:', error);
-      alert('Erreur lors de la sauvegarde');
+      if (!error.response?.data?.error?.includes('possède déjà')) {
+        alert('Erreur lors de la sauvegarde');
+      }
     } finally {
       setLoading(false);
     }

@@ -351,10 +351,42 @@ router.patch('/:id', authenticateToken, (req, res) => {
 router.patch('/produits/:produitId', authenticateToken, (req, res) => {
   try {
     const { produitId } = req.params;
-    const { donnees_techniques, statut, assigned_to } = req.body;
+    const { donnees_techniques, statut, assigned_to, type_produit } = req.body;
 
     const updates = [];
     const params = [];
+
+    // Valider et gérer changement de type_produit
+    if (type_produit !== undefined) {
+      const validTypes = ['destratification', 'pression', 'matelas_isolants'];
+      if (!validTypes.includes(type_produit)) {
+        return res.status(400).json({ error: 'type_produit invalide' });
+      }
+
+      // Récupérer le produit actuel pour vérifier le client_base_id
+      const currentProduit = db.prepare('SELECT client_base_id, type_produit FROM clients_produits WHERE id = ?').get(produitId);
+      if (!currentProduit) {
+        return res.status(404).json({ error: 'Produit introuvable' });
+      }
+
+      // Vérifier que le client n'a pas déjà ce type de produit
+      if (type_produit !== currentProduit.type_produit) {
+        const existingProduit = db.prepare(
+          'SELECT id FROM clients_produits WHERE client_base_id = ? AND type_produit = ? AND id != ?'
+        ).get(currentProduit.client_base_id, type_produit, produitId);
+
+        if (existingProduit) {
+          return res.status(400).json({
+            error: `Ce client possède déjà un produit "${type_produit}". Impossible de modifier le type.`
+          });
+        }
+
+        console.log(`Changement type_produit: ${currentProduit.type_produit} → ${type_produit} (produit ${produitId})`);
+      }
+
+      updates.push('type_produit = ?');
+      params.push(type_produit);
+    }
 
     if (donnees_techniques !== undefined) {
       updates.push('donnees_techniques = ?');
@@ -876,12 +908,180 @@ router.post('/bulk-assign', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
+// Suppression en masse de produits (garde client si a d'autres produits)
+router.post('/produits/bulk-delete', authenticateToken, (req, res) => {
+  try {
+    const { produitIds } = req.body;
+
+    if (!produitIds || !Array.isArray(produitIds) || produitIds.length === 0) {
+      return res.status(400).json({ error: 'produitIds requis (array non vide)' });
+    }
+
+    console.log(`Suppression en masse: ${produitIds.length} produit(s)`);
+
+    // Récupérer les client_base_id concernés avant suppression
+    const placeholders = produitIds.map(() => '?').join(',');
+    const affectedClients = db.prepare(`
+      SELECT DISTINCT client_base_id FROM clients_produits WHERE id IN (${placeholders})
+    `).all(...produitIds);
+
+    // Supprimer les produits
+    const deleteResult = db.prepare(`
+      DELETE FROM clients_produits WHERE id IN (${placeholders})
+    `).run(...produitIds);
+
+    console.log(`${deleteResult.changes} produit(s) supprimé(s)`);
+
+    // Supprimer les client_base orphelins (qui n'ont plus aucun produit)
+    let orphansDeleted = 0;
+    for (const { client_base_id } of affectedClients) {
+      const remainingProducts = db.prepare(
+        'SELECT COUNT(*) as count FROM clients_produits WHERE client_base_id = ?'
+      ).get(client_base_id);
+
+      if (remainingProducts.count === 0) {
+        db.prepare('DELETE FROM client_base WHERE id = ?').run(client_base_id);
+        orphansDeleted++;
+        console.log(`Client base ${client_base_id} supprimé (plus de produits)`);
+      }
+    }
+
+    res.json({
+      message: `${deleteResult.changes} produit(s) supprimé(s)`,
+      produitsDeleted: deleteResult.changes,
+      clientsDeleted: orphansDeleted
+    });
+
+  } catch (error) {
+    console.error('Erreur suppression en masse:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============================================
-// DUPLICATION (deprecated - utiliser POST /:id/produits à la place)
+// DUPLICATION
 // ============================================
 
+// Dupliquer un PRODUIT spécifique avec choix du type_produit cible
+router.post('/produits/:produitId/duplicate', authenticateToken, (req, res) => {
+  try {
+    const { produitId } = req.params;
+    const { type_produit } = req.body;
+
+    if (!type_produit) {
+      return res.status(400).json({ error: 'type_produit requis dans le body' });
+    }
+
+    // Valider type_produit
+    const validTypes = ['destratification', 'pression', 'matelas_isolants'];
+    if (!validTypes.includes(type_produit)) {
+      return res.status(400).json({ error: 'type_produit invalide' });
+    }
+
+    // Récupérer le produit source
+    const sourceProduit = db.prepare(`
+      SELECT cp.*, cb.*
+      FROM clients_produits cp
+      INNER JOIN client_base cb ON cp.client_base_id = cb.id
+      WHERE cp.id = ?
+    `).get(produitId);
+
+    if (!sourceProduit) {
+      return res.status(404).json({ error: 'Produit source non trouvé' });
+    }
+
+    console.log(`Duplication produit ${produitId}: ${sourceProduit.societe} → ${type_produit}`);
+
+    // Créer nouveau client_base (copie)
+    const newBaseResult = db.prepare(`
+      INSERT INTO client_base (
+        societe, adresse, code_postal, telephone, siret,
+        nom_site, adresse_travaux, code_postal_travaux,
+        nom_signataire, fonction, telephone_signataire, mail_signataire,
+        nom_contact_site, prenom_contact_site, fonction_contact_site,
+        mail_contact_site, telephone_contact_site,
+        code_naf, donnees_enrichies
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      `${sourceProduit.societe} (copie)`,
+      sourceProduit.adresse,
+      sourceProduit.code_postal,
+      sourceProduit.telephone,
+      sourceProduit.siret,
+      sourceProduit.nom_site,
+      sourceProduit.adresse_travaux,
+      sourceProduit.code_postal_travaux,
+      sourceProduit.nom_signataire,
+      sourceProduit.fonction,
+      sourceProduit.telephone_signataire,
+      sourceProduit.mail_signataire,
+      sourceProduit.nom_contact_site,
+      sourceProduit.prenom_contact_site,
+      sourceProduit.fonction_contact_site,
+      sourceProduit.mail_contact_site,
+      sourceProduit.telephone_contact_site,
+      sourceProduit.code_naf,
+      sourceProduit.donnees_enrichies
+    );
+
+    const newClientBaseId = newBaseResult.lastInsertRowid;
+
+    // Créer le produit avec le type choisi (données techniques réinitialisées)
+    const newProduitResult = db.prepare(`
+      INSERT INTO clients_produits (
+        client_base_id, type_produit, donnees_techniques, statut, assigned_to
+      ) VALUES (?, ?, '{}', 'nouveau', ?)
+    `).run(
+      newClientBaseId,
+      type_produit,
+      req.user.id
+    );
+
+    // Copier commentaires
+    const commentsResult = db.prepare(`
+      INSERT INTO client_comments (client_base_id, user_id, comment, created_at)
+      SELECT ?, user_id, comment, CURRENT_TIMESTAMP
+      FROM client_comments WHERE client_base_id = ?
+    `).run(newClientBaseId, sourceProduit.client_base_id);
+
+    // Copier rendez-vous futurs
+    const appointmentsResult = db.prepare(`
+      INSERT INTO client_appointments (client_base_id, user_id, title, date, time, location, notes, created_at)
+      SELECT ?, user_id, title, date, time, location, notes, CURRENT_TIMESTAMP
+      FROM client_appointments
+      WHERE client_base_id = ? AND datetime(date || ' ' || COALESCE(time, '00:00')) >= datetime('now')
+    `).run(newClientBaseId, sourceProduit.client_base_id);
+
+    // Copier documents (fichiers physiques non copiés, seulement les références)
+    const documentsResult = db.prepare(`
+      INSERT INTO client_documents (client_base_id, file_name, file_path, file_type, file_size, uploaded_by, uploaded_at)
+      SELECT ?, file_name, file_path, file_type, file_size, uploaded_by, CURRENT_TIMESTAMP
+      FROM client_documents WHERE client_base_id = ?
+    `).run(newClientBaseId, sourceProduit.client_base_id);
+
+    console.log(`✅ Duplication réussie: ${commentsResult.changes} commentaires, ${appointmentsResult.changes} RDV, ${documentsResult.changes} docs`);
+
+    res.status(201).json({
+      message: 'Client dupliqué avec succès',
+      id: newClientBaseId,
+      client_base_id: newClientBaseId,
+      produit_id: newProduitResult.lastInsertRowid,
+      type_produit,
+      copied: {
+        comments: commentsResult.changes,
+        appointments: appointmentsResult.changes,
+        documents: documentsResult.changes
+      }
+    });
+
+  } catch (error) {
+    console.error('Erreur duplication produit:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Dupliquer un client (ancienne méthode - conservée pour rétrocompat)
-// RECOMMANDÉ: Utiliser POST /clients/:id/produits pour ajouter un produit
+// RECOMMANDÉ: Utiliser POST /clients/produits/:produitId/duplicate
 router.post('/:id/duplicate', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;

@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import ClientModal from '../components/ClientModal';
 import ImportCSVHelpModal from '../components/ImportCSVHelpModal';
 import AssignClientsModal from '../components/AssignClientsModal';
+import DuplicateClientModal from '../components/DuplicateClientModal';
 import styles from './Clients.module.css';
 
 const Clients = () => {
@@ -34,6 +35,10 @@ const Clients = () => {
 
   // Modal attribution
   const [showAssignModal, setShowAssignModal] = useState(false);
+
+  // Modal duplication
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [clientToDuplicate, setClientToDuplicate] = useState(null);
 
   // Preview commentaires
   const [hoveredClient, setHoveredClient] = useState(null);
@@ -161,12 +166,22 @@ const Clients = () => {
 
   const handleBulkDelete = async () => {
     if (!selectedClients.length) return;
-    if (!window.confirm(`Supprimer ${selectedClients.length} client(s) ?`)) return;
+
+    const confirmMessage = `Supprimer ${selectedClients.length} produit(s) sélectionné(s) ?\n\n` +
+      `Note: Si un client n'a plus aucun produit après suppression, il sera complètement supprimé.`;
+
+    if (!window.confirm(confirmMessage)) return;
 
     try {
-      for (const id of selectedClients) {
-        await api.delete(`/clients/${id}`);
-      }
+      const response = await api.post('/clients/produits/bulk-delete', {
+        produitIds: selectedClients
+      });
+
+      alert(`✅ ${response.data.produitsDeleted} produit(s) supprimé(s)\n` +
+            (response.data.clientsDeleted > 0
+              ? `🗑️ ${response.data.clientsDeleted} client(s) complet(s) supprimé(s) (plus de produits)`
+              : ''));
+
       setSelectedClients([]);
       fetchClients();
     } catch (error) {
@@ -174,29 +189,14 @@ const Clients = () => {
     }
   };
 
-  const handleDuplicateClient = async (client) => {
-    if (!window.confirm(`Dupliquer le client "${client.societe}" avec tous ses commentaires, rendez-vous et documents ?`)) {
-      return;
-    }
+  const handleDuplicateClient = (client) => {
+    setClientToDuplicate(client);
+    setShowDuplicateModal(true);
+  };
 
-    try {
-      const response = await api.post(`/clients/${client.id}/duplicate`);
-
-      // Gérer le format de réponse (avec ou sans détails copied)
-      const copied = response.data.copied || { comments: 0, appointments: 0, documents: 0 };
-
-      alert(`Client dupliqué avec succès!\n\n` +
-        `✅ ${copied.comments} commentaire(s)\n` +
-        `✅ ${copied.appointments} rendez-vous futur(s)\n` +
-        `✅ ${copied.documents} document(s)`
-      );
-      fetchClients();
-      // Ouvrir le modal du nouveau client
-      setSelectedClient(response.data.client);
-    } catch (error) {
-      console.error('Erreur duplication:', error);
-      alert('Erreur lors de la duplication du client');
-    }
+  const handleDuplicationComplete = () => {
+    fetchClients();
+    setClientToDuplicate(null);
   };
 
   const handleStatusChange = async (clientId, newStatut) => {
@@ -685,6 +685,18 @@ const Clients = () => {
             setSelectedClients([]);
             fetchClients();
           }}
+        />
+      )}
+
+      {/* Modal duplication avec choix du produit */}
+      {showDuplicateModal && clientToDuplicate && (
+        <DuplicateClientModal
+          client={clientToDuplicate}
+          onClose={() => {
+            setShowDuplicateModal(false);
+            setClientToDuplicate(null);
+          }}
+          onDuplicated={handleDuplicationComplete}
         />
       )}
     </div>
