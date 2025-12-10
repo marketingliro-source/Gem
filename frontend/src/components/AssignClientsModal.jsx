@@ -34,69 +34,94 @@ const AssignClientsModal = ({ clientIds, onClose, onAssigned }) => {
         userId: parseInt(selectedUserId)
       });
 
-      alert(response.data.message);
+      alert(`✅ ${response.data.message}`);
       onAssigned && onAssigned();
       onClose();
     } catch (error) {
       console.error('Erreur attribution en masse:', error);
-      alert('Erreur lors de l\'attribution');
+      alert('❌ Erreur lors de l\'attribution');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className={styles.modalOverlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
-        <div className={styles.modalHeader}>
+    <div className={styles.overlay} onClick={onClose}>
+      <div className={styles.modal} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+        {/* Header */}
+        <div className={styles.header}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <UserCheck size={24} style={{ color: '#10b981' }} />
-            <h2>Attribuer {clientIds.length} client(s)</h2>
+            <UserCheck size={24} style={{ color: 'var(--accent-color)' }} />
+            <div>
+              <h2 className={styles.title}>Attribuer des clients</h2>
+            </div>
           </div>
-          <button onClick={onClose} className={styles.closeButton}>
+          <button onClick={onClose} className={styles.closeBtn} disabled={loading}>
             <X size={20} />
           </button>
         </div>
 
-        <div className={styles.modalBody}>
-          <div className={styles.section}>
-            <p style={{ marginBottom: '20px', color: '#94a3b8' }}>
-              Sélectionnez le télépro à qui attribuer les {clientIds.length} client(s) sélectionné(s).
-              Les clients déjà attribués seront réattribués.
-            </p>
-
-            <div className={styles.formGroup}>
-              <label>Télépro *</label>
-              <select
-                value={selectedUserId}
-                onChange={(e) => setSelectedUserId(e.target.value)}
-                className={styles.styledSelect}
-                disabled={loading}
-                required
-              >
-                <option value="">-- Sélectionner un télépro --</option>
-                {telepros.map(t => (
-                  <option key={t.id} value={t.id}>
-                    {t.username} ({t.role})
-                  </option>
-                ))}
-              </select>
+        {/* Body */}
+        <div className={styles.content}>
+          {/* Info */}
+          <div style={{
+            padding: '14px 16px',
+            background: 'var(--bg-hover)',
+            borderRadius: '8px',
+            marginBottom: '20px',
+            border: '1px solid var(--border-color)'
+          }}>
+            <div style={{
+              fontSize: '14px',
+              fontWeight: '600',
+              color: 'var(--text-primary)',
+              marginBottom: '4px'
+            }}>
+              {clientIds.length} client(s) sélectionné(s)
             </div>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+              Choisissez le télépro à qui attribuer ces clients.
+              Les clients déjà attribués seront réattribués.
+            </div>
+          </div>
+
+          {/* Select Telepro */}
+          <div className={styles.formGroup}>
+            <label>Télépro *</label>
+            <select
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              className={styles.styledSelect}
+              disabled={loading}
+              required
+            >
+              <option value="">-- Sélectionner un télépro --</option>
+              {telepros.map(t => (
+                <option key={t.id} value={t.id}>
+                  {t.username} ({t.role})
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
+        {/* Footer */}
         <div className={styles.modalFooter}>
           <button
             onClick={onClose}
-            className={styles.cancelButton}
+            className={styles.cancelBtn}
             disabled={loading}
           >
             Annuler
           </button>
           <button
             onClick={handleAssign}
-            className={styles.saveButton}
+            className={styles.saveBtn}
             disabled={loading || !selectedUserId}
+            style={{
+              opacity: loading || !selectedUserId ? 0.6 : 1,
+              cursor: loading || !selectedUserId ? 'not-allowed' : 'pointer'
+            }}
           >
             {loading ? 'Attribution...' : 'Attribuer'}
           </button>
