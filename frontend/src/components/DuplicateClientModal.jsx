@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import api from '../utils/api';
 import { X, Copy, CheckCircle } from 'lucide-react';
 import styles from './ClientModal.module.css';
@@ -6,6 +7,12 @@ import styles from './ClientModal.module.css';
 const DuplicateClientModal = ({ client, onClose, onDuplicated }) => {
   const [loading, setLoading] = useState(false);
   const [selectedType, setSelectedType] = useState(null);
+  const { produit } = useParams();
+
+  // Fermer la modale si l'utilisateur change de catégorie de produit
+  useEffect(() => {
+    onClose();
+  }, [produit]);
 
   const PRODUITS = [
     { key: 'destratification', label: 'Destratification', color: '#10b981', icon: '🌀' },
@@ -39,19 +46,19 @@ const DuplicateClientModal = ({ client, onClose, onDuplicated }) => {
   };
 
   return (
-    <div className={styles.modalOverlay} onClick={onClose}>
+    <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-        <div className={styles.modalHeader}>
+        <div className={styles.header}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <Copy size={24} style={{ color: '#3b82f6' }} />
             <h2>Dupliquer le client</h2>
           </div>
-          <button onClick={onClose} className={styles.closeButton} disabled={loading}>
+          <button onClick={onClose} className={styles.closeBtn} disabled={loading}>
             <X size={20} />
           </button>
         </div>
 
-        <div className={styles.modalBody}>
+        <div className={styles.content}>
           <div className={styles.section}>
             <div style={{
               padding: '16px',
@@ -165,7 +172,7 @@ const DuplicateClientModal = ({ client, onClose, onDuplicated }) => {
           <div className={styles.modalFooter}>
             <button
               onClick={onClose}
-              className={styles.cancelButton}
+              className={styles.cancelBtn}
             >
               Annuler
             </button>

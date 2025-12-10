@@ -1039,8 +1039,8 @@ router.post('/produits/:produitId/duplicate', authenticateToken, (req, res) => {
 
     // Copier commentaires
     const commentsResult = db.prepare(`
-      INSERT INTO client_comments (client_base_id, user_id, comment, created_at)
-      SELECT ?, user_id, comment, CURRENT_TIMESTAMP
+      INSERT INTO client_comments (client_base_id, user_id, content, created_at)
+      SELECT ?, user_id, content, CURRENT_TIMESTAMP
       FROM client_comments WHERE client_base_id = ?
     `).run(newClientBaseId, sourceProduit.client_base_id);
 
