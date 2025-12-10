@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../utils/api';
 import { X, Copy, CheckCircle } from 'lucide-react';
@@ -8,11 +8,14 @@ const DuplicateClientModal = ({ client, onClose, onDuplicated }) => {
   const [loading, setLoading] = useState(false);
   const [selectedType, setSelectedType] = useState(null);
   const { produit } = useParams();
+  const initialProduit = useRef(produit);
 
   // Fermer la modale si l'utilisateur change de catégorie de produit
   useEffect(() => {
-    onClose();
-  }, [produit]);
+    if (produit !== initialProduit.current) {
+      onClose();
+    }
+  }, [produit, onClose]);
 
   const PRODUITS = [
     { key: 'destratification', label: 'Destratification', color: '#10b981', icon: '🌀' },
