@@ -8,8 +8,9 @@ const AddAppointmentModal = ({ onClose, onSuccess }) => {
     date: '',
     time: '',
     title: '',
-    lead_id: null,
-    client_id: null
+    client_base_id: null,
+    location: '',
+    notes: ''
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -73,11 +74,10 @@ const AddAppointmentModal = ({ onClose, onSuccess }) => {
     setSearchQuery(contact.displayName);
     setSearchResults([]);
 
-    // Only clients (no leads)
+    // Set client_base_id from selected contact
     setFormData(prev => ({
       ...prev,
-      client_id: contact.id,
-      lead_id: null,
+      client_base_id: contact.id,
       title: `RDV avec ${contact.nom_signataire || contact.societe || 'Client'}`
     }));
   };
