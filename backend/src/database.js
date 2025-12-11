@@ -5,6 +5,10 @@ const fs = require('fs');
 
 const db = new Database(path.join(__dirname, '../database.db'));
 
+// Activer les contraintes de clés étrangères SQLite
+db.pragma('foreign_keys = ON');
+console.log('✓ Clés étrangères SQLite activées');
+
 // Créer le dossier uploads s'il n'existe pas
 const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) {

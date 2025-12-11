@@ -52,13 +52,30 @@ const Users = () => {
   };
 
   const handleDeleteUser = async (userId) => {
-    if (!confirm('Supprimer cet utilisateur ?')) return;
+    const user = users.find(u => u.id === userId);
+    const userName = user ? user.username : 'cet utilisateur';
+
+    if (!confirm(`Supprimer l'utilisateur "${userName}" ?\n\nCette action est irréversible.\nLes clients assignés seront désassignés automatiquement.`)) {
+      return;
+    }
 
     try {
-      await api.delete(`/users/${userId}`);
+      const response = await api.delete(`/users/${userId}`);
+
+      // Afficher les impacts si présents
+      if (response.data.impacts && response.data.impacts.length > 0) {
+        const impactsMessage = response.data.impacts.join('\n• ');
+        alert(`✓ ${response.data.message}\n\nImpacts:\n• ${impactsMessage}`);
+      } else {
+        alert(`✓ ${response.data.message}`);
+      }
+
       fetchUsers();
     } catch (error) {
-      alert('Erreur lors de la suppression');
+      // Afficher le message d'erreur détaillé du backend
+      const errorMessage = error.response?.data?.error || 'Erreur lors de la suppression';
+      alert(`❌ Erreur: ${errorMessage}`);
+      console.error('Erreur lors de la suppression:', error);
     }
   };
 

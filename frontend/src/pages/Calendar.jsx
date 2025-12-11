@@ -30,20 +30,26 @@ const Calendar = () => {
     // Convert appointments to FullCalendar events
     const calendarEvents = appointments
       .filter(apt => !selectedAgent || apt.user_id === parseInt(selectedAgent))
-      .map(apt => ({
-        id: apt.id,
-        title: `${apt.time} - ${apt.first_name} ${apt.last_name}`,
-        start: `${apt.date}T${apt.time}`,
-        extendedProps: {
-          leadName: `${apt.first_name} ${apt.last_name}`,
-          agent: apt.username,
-          time: apt.time,
-          leadId: apt.lead_id,
-          clientId: apt.client_id
-        },
-        backgroundColor: getEventColor(apt.user_id),
-        borderColor: getEventColor(apt.user_id)
-      }));
+      .map(apt => {
+        // Construire le nom à afficher (société ou nom du signataire)
+        const displayName = apt.societe || apt.nom_signataire || apt.title || 'Sans nom';
+
+        return {
+          id: apt.id,
+          title: `${apt.time} - ${displayName}`,
+          start: `${apt.date}T${apt.time}`,
+          extendedProps: {
+            leadName: displayName,
+            agent: apt.username,
+            time: apt.time,
+            clientBaseId: apt.client_base_id,
+            location: apt.location,
+            notes: apt.notes
+          },
+          backgroundColor: getEventColor(apt.user_id),
+          borderColor: getEventColor(apt.user_id)
+        };
+      });
     setEvents(calendarEvents);
   }, [appointments, selectedAgent]);
 
@@ -93,13 +99,21 @@ const Calendar = () => {
     const props = event.extendedProps;
 
     // Afficher uniquement les détails du rendez-vous
-    const message = `📅 Détails du rendez-vous\n\n` +
+    let message = `📅 Détails du rendez-vous\n\n` +
       `📆 Date: ${event.start.toLocaleDateString('fr-FR')}\n` +
       `🕐 Heure: ${props.time}\n` +
-      `👤 Contact: ${props.leadName}\n` +
-      `👨‍💼 Agent: ${props.agent}\n\n` +
-      `💡 Pour déplacer ce rendez-vous:\n` +
-      `→ Glissez-déposez le directement dans le calendrier`;
+      `🏢 Entreprise: ${props.leadName}\n` +
+      `👨‍💼 Agent: ${props.agent}`;
+
+    if (props.location) {
+      message += `\n📍 Lieu: ${props.location}`;
+    }
+
+    if (props.notes) {
+      message += `\n📝 Notes: ${props.notes}`;
+    }
+
+    message += `\n\n💡 Pour déplacer ce rendez-vous:\n→ Glissez-déposez le directement dans le calendrier`;
 
     alert(message);
   };

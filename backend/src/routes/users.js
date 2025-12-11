@@ -124,9 +124,89 @@ router.patch('/:id', authenticateToken, requireAdmin, (req, res) => {
 router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
   try {
     const { id } = req.params;
+
+    // Vérifier que l'utilisateur existe
+    const user = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(id);
+    if (!user) {
+      return res.status(404).json({ error: 'Utilisateur introuvable' });
+    }
+
+    // Empêcher la suppression du dernier administrateur
+    if (user.role === 'admin') {
+      const adminCount = db.prepare('SELECT COUNT(*) as count FROM users WHERE role = ?').get('admin');
+      if (adminCount.count <= 1) {
+        return res.status(400).json({
+          error: 'Impossible de supprimer le dernier administrateur'
+        });
+      }
+    }
+
+    // Empêcher un admin de se supprimer lui-même
+    if (parseInt(id) === req.user.id) {
+      return res.status(400).json({
+        error: 'Vous ne pouvez pas supprimer votre propre compte'
+      });
+    }
+
+    // Compter les données liées pour informer l'utilisateur
+    const stats = {
+      clients: 0,
+      comments: 0,
+      appointments: 0,
+      documents: 0
+    };
+
+    try {
+      stats.clients = db.prepare('SELECT COUNT(*) as count FROM clients_produits WHERE assigned_to = ?').get(id).count;
+    } catch (e) {
+      // Table clients_produits peut ne pas exister (ancien schéma)
+      try {
+        stats.clients = db.prepare('SELECT COUNT(*) as count FROM clients WHERE assigned_to = ?').get(id).count;
+      } catch (e2) {}
+    }
+
+    try {
+      stats.comments = db.prepare('SELECT COUNT(*) as count FROM client_comments WHERE user_id = ?').get(id).count;
+    } catch (e) {}
+
+    try {
+      stats.appointments = db.prepare('SELECT COUNT(*) as count FROM client_appointments WHERE user_id = ?').get(id).count;
+    } catch (e) {}
+
+    try {
+      stats.documents = db.prepare('SELECT COUNT(*) as count FROM client_documents WHERE uploaded_by = ?').get(id).count;
+    } catch (e) {}
+
+    // Construire le message d'impacts
+    const impacts = [];
+    if (stats.clients > 0) {
+      impacts.push(`${stats.clients} client${stats.clients > 1 ? 's' : ''} désassigné${stats.clients > 1 ? 's' : ''}`);
+    }
+    if (stats.comments > 0) {
+      impacts.push(`${stats.comments} commentaire${stats.comments > 1 ? 's' : ''} supprimé${stats.comments > 1 ? 's' : ''}`);
+    }
+    if (stats.appointments > 0) {
+      impacts.push(`${stats.appointments} rendez-vous supprimé${stats.appointments > 1 ? 's' : ''}`);
+    }
+    if (stats.documents > 0) {
+      impacts.push(`${stats.documents} document${stats.documents > 1 ? 's' : ''} conservé${stats.documents > 1 ? 's' : ''}`);
+    }
+
+    // Supprimer l'utilisateur (les contraintes CASCADE/SET NULL s'appliquent)
     db.prepare('DELETE FROM users WHERE id = ?').run(id);
-    res.json({ message: 'Utilisateur supprimé' });
+
+    console.log(`✓ Utilisateur ${user.username} (ID: ${id}) supprimé par ${req.user.username}`);
+    if (impacts.length > 0) {
+      console.log(`  Impacts: ${impacts.join(', ')}`);
+    }
+
+    res.json({
+      message: `Utilisateur "${user.username}" supprimé avec succès`,
+      impacts: impacts,
+      stats: stats
+    });
   } catch (error) {
+    console.error('Erreur lors de la suppression de l\'utilisateur:', error);
     res.status(500).json({ error: error.message });
   }
 });
