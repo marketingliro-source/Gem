@@ -57,6 +57,65 @@ router.get('/', authenticateToken, (req, res) => {
   }
 });
 
+// Créer un nouveau RDV
+router.post('/', authenticateToken, (req, res) => {
+  try {
+    const { client_base_id, title, date, time, location, notes } = req.body;
+
+    // Validation des champs requis
+    if (!client_base_id || !title || !date || !time) {
+      return res.status(400).json({
+        error: 'Champs manquants (client_base_id, title, date, time requis)'
+      });
+    }
+
+    // Vérifier que le client existe
+    const client = db.prepare('SELECT id FROM client_base WHERE id = ?').get(client_base_id);
+    if (!client) {
+      return res.status(404).json({ error: 'Client introuvable' });
+    }
+
+    // Créer le rendez-vous
+    const result = db.prepare(`
+      INSERT INTO client_appointments (client_base_id, user_id, title, date, time, location, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      client_base_id,
+      req.user.id, // L'utilisateur connecté est assigné au RDV
+      title,
+      date,
+      time,
+      location || null,
+      notes || null
+    );
+
+    // Retourner le RDV créé avec les infos complètes
+    const newAppointment = db.prepare(`
+      SELECT
+        client_appointments.id,
+        client_appointments.client_base_id,
+        client_appointments.title,
+        client_appointments.date,
+        client_appointments.time,
+        client_appointments.location,
+        client_appointments.notes,
+        client_appointments.created_at,
+        client_base.societe,
+        client_base.nom_signataire,
+        users.username
+      FROM client_appointments
+      JOIN client_base ON client_appointments.client_base_id = client_base.id
+      JOIN users ON client_appointments.user_id = users.id
+      WHERE client_appointments.id = ?
+    `).get(result.lastInsertRowid);
+
+    res.status(201).json(newAppointment);
+  } catch (error) {
+    console.error('Erreur POST appointment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Mettre à jour un RDV (drag & drop dans le calendrier)
 router.patch('/:id', authenticateToken, (req, res) => {
   try {
