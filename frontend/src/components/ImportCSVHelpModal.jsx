@@ -97,6 +97,28 @@ const ImportCSVHelpModal = ({ isOpen, onClose }) => {
 
         {/* Content */}
         <div className={styles.content}>
+          {/* Nouvelle fonctionnalité */}
+          <div style={{
+            marginBottom: '24px',
+            padding: '16px 18px',
+            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(5, 150, 105, 0.05) 100%)',
+            border: '2px solid rgba(16, 185, 129, 0.3)',
+            borderRadius: '12px',
+            fontSize: '14px',
+            color: '#065f46',
+            lineHeight: '1.6'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', fontWeight: '600', color: '#059669' }}>
+              <CheckCircle size={20} />
+              <span>Nouveau : Sélection du produit simplifiée</span>
+            </div>
+            <p style={{ marginBottom: 0 }}>
+              <strong>Bonne nouvelle !</strong> Vous n'avez plus besoin d'inclure la colonne <code style={{ background: 'rgba(0,0,0,0.1)', padding: '2px 6px', borderRadius: '4px', fontSize: '13px' }}>type_produit</code> dans votre CSV.
+              Le type de produit est maintenant sélectionné directement lors de l'import via un menu déroulant,
+              ce qui évite les erreurs de saisie.
+            </p>
+          </div>
+
           {/* Étape 1 */}
           <div className={styles.section}>
             <div className={styles.stepTitle}>
@@ -152,7 +174,7 @@ const ImportCSVHelpModal = ({ isOpen, onClose }) => {
               <div className={styles.fieldCategory}>
                 <h4>⚙️ Produit & Statut</h4>
                 <ul>
-                  <li><strong>type_produit</strong> : destratification, pression ou matelas_isolants (requis)</li>
+                  <li><strong>type_produit</strong> : <span style={{color: '#94a3b8', textDecoration: 'line-through'}}>Cette colonne sera ignorée</span> - Le type de produit est maintenant sélectionné lors de l'import</li>
                   <li><strong>code_naf</strong> : Code NAF de l'entreprise</li>
                   <li><strong>statut</strong> : nouveau, a_rappeler, mail_infos_envoye, etc.</li>
                 </ul>
@@ -191,10 +213,10 @@ const ImportCSVHelpModal = ({ isOpen, onClose }) => {
               Conseils pour un import réussi
             </h4>
             <ul>
-              <li>Le champ <strong>societe</strong> et <strong>type_produit</strong> sont obligatoires</li>
+              <li>Le champ <strong>societe</strong> est obligatoire</li>
               <li>Utilisez le <strong>point-virgule (;)</strong> comme séparateur</li>
               <li>Pour les champs vides, laissez-les simplement vides (ne mettez pas "vide" ou "N/A")</li>
-              <li>Les valeurs de type_produit acceptées : destratification, pression, matelas_isolants</li>
+              <li>Le <strong>type de produit</strong> est sélectionné lors de l'import via un menu déroulant (plus besoin de le saisir dans le CSV)</li>
               <li>Les statuts valides : nouveau, a_rappeler, mail_infos_envoye, infos_recues, devis_envoye, devis_signe, pose_prevue, pose_terminee, coffrac, termine</li>
               <li>Si vous n'indiquez pas de statut, il sera automatiquement défini sur "nouveau"</li>
             </ul>

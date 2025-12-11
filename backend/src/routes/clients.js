@@ -669,7 +669,7 @@ router.delete('/:id/appointments/:appointmentId', authenticateToken, (req, res) 
 // IMPORT/EXPORT
 // ============================================
 
-// Import CSV (rétrocompat: crée 1 produit par défaut)
+// Import CSV avec type_produit fourni par l'utilisateur
 router.post('/import/csv', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const multer = require('multer');
@@ -682,6 +682,21 @@ router.post('/import/csv', authenticateToken, requireAdmin, async (req, res) => 
         return res.status(400).json({ error: 'Erreur lors de l\'upload' });
       }
 
+      // Récupérer type_produit depuis le body (envoyé par FormData)
+      const type_produit = req.body.type_produit;
+
+      // Validation du type_produit
+      const validTypes = ['destratification', 'pression', 'matelas_isolants'];
+      if (!type_produit || !validTypes.includes(type_produit)) {
+        // Supprimer le fichier uploadé avant de retourner l'erreur
+        if (req.file) fs.unlinkSync(req.file.path);
+        return res.status(400).json({
+          error: `Type de produit invalide. Valeurs acceptées: ${validTypes.join(', ')}`
+        });
+      }
+
+      console.log(`📥 Import CSV démarré - Produit: ${type_produit} - Utilisateur: ${req.user.username}`);
+
       const results = [];
       const filePath = req.file.path;
 
@@ -690,9 +705,17 @@ router.post('/import/csv', authenticateToken, requireAdmin, async (req, res) => 
         .on('data', (data) => results.push(data))
         .on('end', async () => {
           let imported = 0;
+          let errors = [];
 
-          for (const row of results) {
+          for (let i = 0; i < results.length; i++) {
+            const row = results[i];
             try {
+              // Validation basique
+              if (!row.societe || !row.societe.trim()) {
+                errors.push(`Ligne ${i + 2}: Société manquante`);
+                continue;
+              }
+
               // Créer client_base
               const baseResult = db.prepare(`
                 INSERT INTO client_base (
@@ -702,44 +725,61 @@ router.post('/import/csv', authenticateToken, requireAdmin, async (req, res) => 
                   code_naf
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               `).run(
-                row.societe || null,
-                row.adresse || null,
-                row.code_postal || null,
-                row.telephone || null,
-                row.siret || null,
-                row.nom_site || null,
-                row.adresse_travaux || null,
-                row.code_postal_travaux || null,
-                row.nom_signataire || null,
-                row.fonction || null,
-                row.telephone_signataire || null,
-                row.mail_signataire || null,
-                row.code_naf || null
+                row.societe?.trim() || null,
+                row.adresse?.trim() || null,
+                row.code_postal?.trim() || null,
+                row.telephone?.trim() || null,
+                row.siret?.trim() || null,
+                row.nom_site?.trim() || null,
+                row.adresse_travaux?.trim() || null,
+                row.code_postal_travaux?.trim() || null,
+                row.nom_signataire?.trim() || null,
+                row.fonction?.trim() || null,
+                row.telephone_signataire?.trim() || null,
+                row.mail_signataire?.trim() || null,
+                row.code_naf?.trim() || null
               );
 
               const clientBaseId = baseResult.lastInsertRowid;
 
-              // Créer 1 produit par défaut
+              // Utiliser le type_produit fourni par l'utilisateur (ignorer celui du CSV)
               db.prepare(`
                 INSERT INTO clients_produits (
                   client_base_id, type_produit, statut, assigned_to
                 ) VALUES (?, ?, ?, ?)
               `).run(
                 clientBaseId,
-                row.type_produit || 'destratification',
-                row.statut || 'nouveau',
+                type_produit, // Type sélectionné par l'utilisateur
+                row.statut?.trim() || 'nouveau',
                 req.user.id
               );
 
               imported++;
+              console.log(`✓ Ligne ${i + 2}: ${row.societe} importé (${type_produit})`);
             } catch (error) {
-              console.error('Erreur import ligne:', error.message);
+              console.error(`✗ Ligne ${i + 2}: ${error.message}`);
+              errors.push(`Ligne ${i + 2} (${row.societe || 'N/A'}): ${error.message}`);
             }
           }
 
           fs.unlinkSync(filePath);
 
-          res.json({ message: 'Import réussi', imported });
+          // Réponse avec détails
+          if (imported === 0 && errors.length > 0) {
+            return res.status(400).json({
+              error: 'Aucun client importé. Erreurs:\n' + errors.slice(0, 5).join('\n')
+            });
+          }
+
+          console.log(`✅ Import terminé: ${imported}/${results.length} clients importés (${type_produit})`);
+
+          res.json({
+            message: 'Import réussi',
+            imported,
+            type_produit,
+            total: results.length,
+            errors: errors.length > 0 ? errors : undefined
+          });
         });
     });
   } catch (error) {

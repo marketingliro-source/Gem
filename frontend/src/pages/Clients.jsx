@@ -8,6 +8,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import ClientModal from '../components/ClientModal';
 import ImportCSVHelpModal from '../components/ImportCSVHelpModal';
+import ImportCSVModal from '../components/ImportCSVModal';
 import AssignClientsModal from '../components/AssignClientsModal';
 import DuplicateClientModal from '../components/DuplicateClientModal';
 import styles from './Clients.module.css';
@@ -48,6 +49,7 @@ const Clients = () => {
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [showImportHelp, setShowImportHelp] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   // Statuts dynamiques
   const [statuts, setStatuts] = useState([
@@ -236,34 +238,9 @@ const Clients = () => {
     fetchClientComments(clientId);
   };
 
-  // Import CSV
+  // Import CSV - Ouvrir la modal avec sélection de produit
   const handleImportCSV = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.csv';
-    input.onchange = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      setImporting(true);
-      const formData = new FormData();
-      formData.append('file', file);
-
-      try {
-        const response = await api.post('/clients/import/csv', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        alert(`✅ Import réussi!\n${response.data.imported} client(s) importé(s)`);
-        fetchClients();
-      } catch (error) {
-        const errorMsg = error.response?.data?.error || 'Erreur lors de l\'import CSV';
-        alert(`❌ Échec de l'import\n${errorMsg}`);
-        console.error('Import error:', error);
-      } finally {
-        setImporting(false);
-      }
-    };
-    input.click();
+    setShowImportModal(true);
   };
 
   // Export Excel
@@ -674,6 +651,14 @@ const Clients = () => {
       <ImportCSVHelpModal
         isOpen={showImportHelp}
         onClose={() => setShowImportHelp(false)}
+      />
+
+      {/* Modal d'import CSV avec sélection de produit */}
+      <ImportCSVModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onSuccess={() => fetchClients()}
+        onShowHelp={() => setShowImportHelp(true)}
       />
 
       {/* Modal d'attribution en masse */}
