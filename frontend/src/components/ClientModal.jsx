@@ -310,30 +310,19 @@ const ClientModal = ({ client, onClose }) => {
         // 2. Sauvegarder données produit spécifiques
         if (currentProduitId) {
           const produitData = {
-            type_produit: formData.type_produit,
+            // Note: type_produit n'est plus modifiable en édition (champ disabled)
             donnees_techniques: donneesFinales,
             statut: formData.statut
           };
 
-          try {
-            await api.patch(`/clients/produits/${currentProduitId}`, produitData);
-          } catch (produitError) {
-            // Gérer erreur spécifique changement type_produit
-            if (produitError.response?.status === 400 && produitError.response?.data?.error?.includes('possède déjà')) {
-              alert(`❌ ${produitError.response.data.error}\n\nVous ne pouvez pas changer le type de produit car ce client possède déjà ce produit.\n\nSolution: Utilisez "Dupliquer" pour créer un nouveau client avec le produit souhaité.`);
-              throw produitError; // Bloquer la fermeture du modal
-            }
-            throw produitError;
-          }
+          await api.patch(`/clients/produits/${currentProduitId}`, produitData);
         }
       }
 
       onClose(true); // Refresh la liste
     } catch (error) {
       console.error('Erreur sauvegarde:', error);
-      if (!error.response?.data?.error?.includes('possède déjà')) {
-        alert('Erreur lors de la sauvegarde');
-      }
+      alert('Erreur lors de la sauvegarde: ' + (error.response?.data?.error || error.message));
     } finally {
       setLoading(false);
     }
@@ -834,25 +823,39 @@ const ClientModal = ({ client, onClose }) => {
                 <div className={styles.formGrid}>
                   <div className={styles.formGroup}>
                     <label>Type de Produit *</label>
-                    <select
-                      name="type_produit"
-                      value={formData.type_produit}
-                      onChange={handleChange}
-                      className={styles.styledSelect}
-                      style={{
-                        borderColor: PRODUITS.find(p => p.key === formData.type_produit)?.color || '#10b981'
-                      }}
-                      disabled={user?.role !== 'admin' && !isNew}
-                      title={user?.role !== 'admin' && !isNew ? 'Seul un administrateur peut changer le type de produit' : ''}
-                      required
-                    >
-                      {PRODUITS.map(p => (
-                        <option key={p.key} value={p.key}>{p.label}</option>
-                      ))}
-                    </select>
-                    {user?.role !== 'admin' && !isNew && (
+                    {isNew ? (
+                      <select
+                        name="type_produit"
+                        value={formData.type_produit}
+                        onChange={handleChange}
+                        className={styles.styledSelect}
+                        style={{
+                          borderColor: PRODUITS.find(p => p.key === formData.type_produit)?.color || '#10b981'
+                        }}
+                        required
+                      >
+                        {PRODUITS.map(p => (
+                          <option key={p.key} value={p.key}>{p.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={PRODUITS.find(p => p.key === formData.type_produit)?.label || formData.type_produit}
+                        className={styles.styledInput}
+                        style={{
+                          borderColor: PRODUITS.find(p => p.key === formData.type_produit)?.color || '#10b981',
+                          backgroundColor: '#1e293b',
+                          color: '#94a3b8',
+                          cursor: 'not-allowed'
+                        }}
+                        disabled
+                        title="Le type de produit ne peut pas être modifié. Utilisez le bouton 'Dupliquer' pour créer un nouveau produit."
+                      />
+                    )}
+                    {!isNew && (
                       <small style={{ color: '#94a3b8', fontSize: '12px', marginTop: '4px', display: 'block' }}>
-                        Seul un administrateur peut modifier le type de produit
+                        💡 Utilisez le bouton "Dupliquer" pour créer un autre type de produit
                       </small>
                     )}
                   </div>
