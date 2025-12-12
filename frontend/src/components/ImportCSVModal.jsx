@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Upload, AlertCircle, HelpCircle } from 'lucide-react';
+import { X, Upload, AlertCircle, HelpCircle, Fan, Wind, Layers } from 'lucide-react';
 import api from '../utils/api';
 import styles from './ImportCSVModal.module.css';
 
@@ -10,9 +10,9 @@ const ImportCSVModal = ({ isOpen, onClose, onSuccess, onShowHelp }) => {
   const [step, setStep] = useState(1); // 1 = choix produit, 2 = choix fichier
 
   const PRODUITS = [
-    { key: 'destratification', label: 'Destratification', color: '#10b981', icon: '💨' },
-    { key: 'pression', label: 'Pression', color: '#8b5cf6', icon: '⚡' },
-    { key: 'matelas_isolants', label: 'Matelas Isolants', color: '#f59e0b', icon: '🔥' }
+    { key: 'destratification', label: 'Destratification', color: '#10b981', Icon: Fan },
+    { key: 'pression', label: 'Pression', color: '#8b5cf6', Icon: Wind },
+    { key: 'matelas_isolants', label: 'Matelas Isolants', color: '#f59e0b', Icon: Layers }
   ];
 
   const handleProduitSelect = (produitKey) => {
@@ -107,45 +107,60 @@ const ImportCSVModal = ({ isOpen, onClose, onSuccess, onShowHelp }) => {
               </div>
 
               <div className={styles.productButtons}>
-                {PRODUITS.map(produit => (
-                  <button
-                    key={produit.key}
-                    onClick={() => handleProduitSelect(produit.key)}
-                    className={styles.productButton}
-                    style={{
-                      borderColor: `${produit.color}40`
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = `${produit.color}10`;
-                      e.currentTarget.style.borderColor = produit.color;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'var(--bg-secondary)';
-                      e.currentTarget.style.borderColor = `${produit.color}40`;
-                    }}
-                  >
-                    <div
-                      className={styles.productIcon}
-                      style={{ background: `${produit.color}15` }}
+                {PRODUITS.map(produit => {
+                  const Icon = produit.Icon;
+                  return (
+                    <button
+                      key={produit.key}
+                      onClick={() => handleProduitSelect(produit.key)}
+                      style={{
+                        padding: '14px 16px',
+                        border: `1px solid ${produit.color}`,
+                        borderRadius: '8px',
+                        background: 'var(--bg-secondary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        width: '100%'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = `${produit.color}10`;
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'var(--bg-secondary)';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                      }}
                     >
-                      {produit.icon}
-                    </div>
-                    <div className={styles.productInfo}>
-                      <div className={styles.productLabel}>
+                      <div
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          background: `${produit.color}15`,
+                          borderRadius: '8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}
+                      >
+                        <Icon size={20} style={{ color: produit.color }} />
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '15px',
+                          fontWeight: '500',
+                          color: 'var(--text-primary)',
+                          textAlign: 'left'
+                        }}
+                      >
                         {produit.label}
                       </div>
-                      <div className={styles.productKey}>
-                        Valeur technique: <code>{produit.key}</code>
-                      </div>
-                    </div>
-                    <div
-                      className={styles.productArrow}
-                      style={{ color: produit.color }}
-                    >
-                      →
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Help link */}
@@ -171,25 +186,68 @@ const ImportCSVModal = ({ isOpen, onClose, onSuccess, onShowHelp }) => {
             <div>
               {/* Selected Product Display */}
               <div
-                className={styles.selectedProductBox}
                 style={{
-                  background: `${selectedProduitObj.color}10`,
-                  borderColor: `${selectedProduitObj.color}40`
+                  padding: '14px 16px',
+                  background: 'var(--bg-hover)',
+                  borderRadius: '8px',
+                  marginBottom: '20px',
+                  border: '1px solid var(--border-color)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px'
                 }}
               >
-                <div className={styles.selectedProductIcon}>{selectedProduitObj.icon}</div>
-                <div className={styles.selectedProductInfo}>
-                  <div className={styles.selectedProductLabel}>
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    background: `${selectedProduitObj.color}15`,
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}
+                >
+                  <selectedProduitObj.Icon size={20} style={{ color: selectedProduitObj.color }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '2px' }}>
                     Produit sélectionné
                   </div>
                   <div
-                    className={styles.selectedProductName}
-                    style={{ color: selectedProduitObj.color }}
+                    style={{
+                      fontSize: '15px',
+                      fontWeight: '600',
+                      color: selectedProduitObj.color
+                    }}
                   >
                     {selectedProduitObj.label}
                   </div>
                 </div>
-                <button onClick={handleBack} className={styles.changeButton}>
+                <button
+                  onClick={handleBack}
+                  style={{
+                    padding: '6px 12px',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '6px',
+                    color: 'var(--text-secondary)',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'var(--bg-tertiary)';
+                    e.currentTarget.style.borderColor = selectedProduitObj.color;
+                    e.currentTarget.style.color = selectedProduitObj.color;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'var(--bg-secondary)';
+                    e.currentTarget.style.borderColor = 'var(--border-color)';
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                  }}
+                >
                   Changer
                 </button>
               </div>
