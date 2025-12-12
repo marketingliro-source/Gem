@@ -839,19 +839,32 @@ const ClientModal = ({ client, onClose }) => {
                         ))}
                       </select>
                     ) : (
-                      <input
-                        type="text"
-                        value={PRODUITS.find(p => p.key === formData.type_produit)?.label || formData.type_produit}
-                        className={styles.styledInput}
+                      <div
                         style={{
-                          borderColor: PRODUITS.find(p => p.key === formData.type_produit)?.color || '#10b981',
-                          backgroundColor: '#1e293b',
-                          color: '#94a3b8',
-                          cursor: 'not-allowed'
+                          padding: '12px 18px',
+                          borderRadius: '10px',
+                          fontSize: '15px',
+                          fontWeight: '600',
+                          background: `${PRODUITS.find(p => p.key === formData.type_produit)?.color || '#10b981'}20`,
+                          color: PRODUITS.find(p => p.key === formData.type_produit)?.color || '#10b981',
+                          border: `2px solid ${PRODUITS.find(p => p.key === formData.type_produit)?.color || '#10b981'}`,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          cursor: 'default'
                         }}
-                        disabled
                         title="Le type de produit ne peut pas être modifié. Utilisez le bouton 'Dupliquer' pour créer un nouveau produit."
-                      />
+                      >
+                        <div
+                          style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            background: PRODUITS.find(p => p.key === formData.type_produit)?.color || '#10b981'
+                          }}
+                        />
+                        {PRODUITS.find(p => p.key === formData.type_produit)?.label || formData.type_produit}
+                      </div>
                     )}
                     {!isNew && (
                       <small style={{ color: '#94a3b8', fontSize: '12px', marginTop: '4px', display: 'block' }}>
