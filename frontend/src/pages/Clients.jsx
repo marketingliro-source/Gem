@@ -100,10 +100,11 @@ const Clients = () => {
 
   const fetchTelepros = async () => {
     try {
-      const response = await api.get('/users/telepros');
+      // Charger tous les utilisateurs (admins + télépros)
+      const response = await api.get('/users');
       setTelepros(response.data);
     } catch (error) {
-      console.error('Erreur chargement télépros:', error);
+      console.error('Erreur chargement utilisateurs:', error);
     }
   };
 
@@ -404,10 +405,10 @@ const Clients = () => {
               }}
               className={styles.statusFilter}
             >
-              <option value="">Tous les agents</option>
+              <option value="">Tous les utilisateurs</option>
               {telepros.map(telepro => (
                 <option key={telepro.id} value={telepro.id}>
-                  {telepro.username}
+                  {telepro.username} ({telepro.role === 'admin' ? 'Admin' : 'Télépro'})
                 </option>
               ))}
             </select>
@@ -505,7 +506,7 @@ const Clients = () => {
                 <th>Société</th>
                 <th>Contact</th>
                 <th>Téléphone</th>
-                <th>Code Postal</th>
+                <th>Localisation</th>
                 <th>{filterProduit ? 'Code NAF' : 'Produit'}</th>
                 <th>Statut</th>
                 {user?.role === 'admin' && <th>Attribué à</th>}
@@ -529,7 +530,12 @@ const Clients = () => {
                   <td className={styles.name}>{client.societe || '-'}</td>
                   <td>{client.nom_signataire || '-'}</td>
                   <td>{client.telephone || '-'}</td>
-                  <td>{client.code_postal || '-'}</td>
+                  <td>
+                    {client.ville && client.code_postal
+                      ? `${client.ville} (${client.code_postal})`
+                      : client.ville || client.code_postal || '-'
+                    }
+                  </td>
                   <td>
                     {filterProduit ? (client.code_naf || '-') : renderProduitBadge(client.type_produit)}
                   </td>

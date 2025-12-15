@@ -29,7 +29,7 @@ router.get('/', authenticateToken, (req, res) => {
     let query = `
       SELECT
         cb.id as client_base_id,
-        cb.societe, cb.adresse, cb.code_postal, cb.telephone, cb.siret,
+        cb.societe, cb.adresse, cb.ville, cb.code_postal, cb.telephone, cb.siret,
         cb.nom_site, cb.adresse_travaux, cb.code_postal_travaux,
         cb.nom_signataire, cb.fonction, cb.telephone_signataire, cb.mail_signataire,
         cb.nom_contact_site, cb.prenom_contact_site, cb.fonction_contact_site,
@@ -118,6 +118,7 @@ router.get('/', authenticateToken, (req, res) => {
       produit_id: row.produit_id,
       societe: row.societe,
       adresse: row.adresse,
+      ville: row.ville,
       code_postal: row.code_postal,
       telephone: row.telephone,
       siret: row.siret,

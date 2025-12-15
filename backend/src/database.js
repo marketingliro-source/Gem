@@ -44,6 +44,7 @@ if (isMigrated) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       societe TEXT,
       adresse TEXT,
+      ville TEXT,
       code_postal TEXT,
       telephone TEXT,
       siret TEXT,
