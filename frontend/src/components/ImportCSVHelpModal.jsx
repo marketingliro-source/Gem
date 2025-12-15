@@ -10,11 +10,13 @@ const ImportCSVHelpModal = ({ isOpen, onClose }) => {
     const headers = [
       'societe',
       'adresse',
+      'ville',
       'code_postal',
       'telephone',
       'siret',
       'nom_site',
       'adresse_travaux',
+      'ville_travaux',
       'code_postal_travaux',
       'nom_signataire',
       'fonction',
@@ -29,11 +31,13 @@ const ImportCSVHelpModal = ({ isOpen, onClose }) => {
     const example1 = [
       'Gem Isolation SARL',
       '123 Rue de la Paix',
+      'Paris',
       '75001',
       '0123456789',
       '12345678900001',
       'Site Principal',
       '123 Rue de la Paix',
+      'Paris',
       '75001',
       'Jean Dupont',
       'Directeur Général',
@@ -47,6 +51,7 @@ const ImportCSVHelpModal = ({ isOpen, onClose }) => {
     const example2 = [
       'Entreprise XYZ',
       '456 Avenue des Champs',
+      'Lyon',
       '69001',
       '0456789123',
       '98765432100002',
@@ -146,6 +151,7 @@ const ImportCSVHelpModal = ({ isOpen, onClose }) => {
                 <ul>
                   <li><strong>societe</strong> : Nom de l'entreprise (requis)</li>
                   <li><strong>adresse</strong> : Adresse complète</li>
+                  <li><strong>ville</strong> : Ville</li>
                   <li><strong>code_postal</strong> : Code postal (5 chiffres)</li>
                   <li><strong>telephone</strong> : Numéro de téléphone</li>
                   <li><strong>siret</strong> : Numéro SIRET (14 chiffres)</li>
@@ -157,6 +163,7 @@ const ImportCSVHelpModal = ({ isOpen, onClose }) => {
                 <ul>
                   <li><strong>nom_site</strong> : Nom du site</li>
                   <li><strong>adresse_travaux</strong> : Adresse du site</li>
+                  <li><strong>ville_travaux</strong> : Ville du site</li>
                   <li><strong>code_postal_travaux</strong> : Code postal du site</li>
                 </ul>
               </div>

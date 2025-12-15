@@ -35,13 +35,15 @@ const ClientModal = ({ client, onClose }) => {
     // Bénéficiaire
     societe: client?.societe || '',
     adresse: client?.adresse || '',
+    ville: client?.ville || '',
     code_postal: client?.code_postal || '',
     telephone: client?.telephone || '',
     siret: client?.siret || '',
-    
+
     // Site Travaux
     nom_site: client?.nom_site || '',
     adresse_travaux: client?.adresse_travaux || '',
+    ville_travaux: client?.ville_travaux || '',
     code_postal_travaux: client?.code_postal_travaux || '',
     
     // Contact Signataire
@@ -217,6 +219,7 @@ const ClientModal = ({ client, onClose }) => {
       ...prev,
       societe: enrichedData.denomination || prev.societe,
       adresse: enrichedData.adresse?.adresseComplete || prev.adresse,
+      ville: enrichedData.adresse?.ville || prev.ville,
       code_postal: enrichedData.adresse?.codePostal || prev.code_postal,
       telephone: enrichedData.telephone || prev.telephone,
       code_naf: enrichedData.codeNAF || prev.code_naf,
@@ -288,11 +291,13 @@ const ClientModal = ({ client, onClose }) => {
         const commonData = {
           societe: formData.societe,
           adresse: formData.adresse,
+          ville: formData.ville,
           code_postal: formData.code_postal,
           telephone: formData.telephone,
           siret: formData.siret,
           nom_site: formData.nom_site,
           adresse_travaux: formData.adresse_travaux,
+          ville_travaux: formData.ville_travaux,
           code_postal_travaux: formData.code_postal_travaux,
           nom_signataire: formData.nom_signataire,
           fonction: formData.fonction,
@@ -644,6 +649,17 @@ const ClientModal = ({ client, onClose }) => {
                     />
                   </div>
                   <div className={styles.formGroup}>
+                    <label>Ville</label>
+                    <input
+                      type="text"
+                      name="ville"
+                      value={formData.ville}
+                      onChange={handleChange}
+                      className={styles.input}
+                      placeholder="Ville"
+                    />
+                  </div>
+                  <div className={styles.formGroup}>
                     <label>Code Postal</label>
                     <input
                       type="text"
@@ -698,6 +714,17 @@ const ClientModal = ({ client, onClose }) => {
                       value={formData.adresse_travaux}
                       onChange={handleChange}
                       className={styles.input}
+                    />
+                  </div>
+                  <div className={styles.formGroup}>
+                    <label>Ville Travaux</label>
+                    <input
+                      type="text"
+                      name="ville_travaux"
+                      value={formData.ville_travaux}
+                      onChange={handleChange}
+                      className={styles.input}
+                      placeholder="Ville"
                     />
                   </div>
                   <div className={styles.formGroup}>

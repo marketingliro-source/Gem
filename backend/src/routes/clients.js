@@ -30,7 +30,7 @@ router.get('/', authenticateToken, (req, res) => {
       SELECT
         cb.id as client_base_id,
         cb.societe, cb.adresse, cb.ville, cb.code_postal, cb.telephone, cb.siret,
-        cb.nom_site, cb.adresse_travaux, cb.code_postal_travaux,
+        cb.nom_site, cb.adresse_travaux, cb.ville_travaux, cb.code_postal_travaux,
         cb.nom_signataire, cb.fonction, cb.telephone_signataire, cb.mail_signataire,
         cb.nom_contact_site, cb.prenom_contact_site, cb.fonction_contact_site,
         cb.mail_contact_site, cb.telephone_contact_site,
@@ -124,6 +124,7 @@ router.get('/', authenticateToken, (req, res) => {
       siret: row.siret,
       nom_site: row.nom_site,
       adresse_travaux: row.adresse_travaux,
+      ville_travaux: row.ville_travaux,
       code_postal_travaux: row.code_postal_travaux,
       nom_signataire: row.nom_signataire,
       fonction: row.fonction,
@@ -212,8 +213,8 @@ router.post('/', authenticateToken, (req, res) => {
   try {
     const {
       // Données communes
-      societe, adresse, code_postal, telephone, siret,
-      nom_site, adresse_travaux, code_postal_travaux,
+      societe, adresse, ville, code_postal, telephone, siret,
+      nom_site, adresse_travaux, ville_travaux, code_postal_travaux,
       nom_signataire, fonction, telephone_signataire, mail_signataire,
       nom_contact_site, prenom_contact_site, fonction_contact_site,
       mail_contact_site, telephone_contact_site,
@@ -242,16 +243,16 @@ router.post('/', authenticateToken, (req, res) => {
     // Créer client_base
     const baseResult = db.prepare(`
       INSERT INTO client_base (
-        societe, adresse, code_postal, telephone, siret,
-        nom_site, adresse_travaux, code_postal_travaux,
+        societe, adresse, ville, code_postal, telephone, siret,
+        nom_site, adresse_travaux, ville_travaux, code_postal_travaux,
         nom_signataire, fonction, telephone_signataire, mail_signataire,
         nom_contact_site, prenom_contact_site, fonction_contact_site,
         mail_contact_site, telephone_contact_site,
         code_naf
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      societe, adresse, code_postal, telephone, siret,
-      nom_site, adresse_travaux, code_postal_travaux,
+      societe, adresse, ville, code_postal, telephone, siret,
+      nom_site, adresse_travaux, ville_travaux, code_postal_travaux,
       nom_signataire, fonction, telephone_signataire, mail_signataire,
       nom_contact_site, prenom_contact_site, fonction_contact_site,
       mail_contact_site, telephone_contact_site,
@@ -301,8 +302,8 @@ router.patch('/:id', authenticateToken, (req, res) => {
     const { id } = req.params;
     const {
       // Données communes
-      societe, adresse, code_postal, telephone, siret,
-      nom_site, adresse_travaux, code_postal_travaux,
+      societe, adresse, ville, code_postal, telephone, siret,
+      nom_site, adresse_travaux, ville_travaux, code_postal_travaux,
       nom_signataire, fonction, telephone_signataire, mail_signataire,
       nom_contact_site, prenom_contact_site, fonction_contact_site,
       mail_contact_site, telephone_contact_site,
@@ -315,11 +316,13 @@ router.patch('/:id', authenticateToken, (req, res) => {
     // Construire UPDATE dynamique
     if (societe !== undefined) { updates.push('societe = ?'); params.push(societe); }
     if (adresse !== undefined) { updates.push('adresse = ?'); params.push(adresse); }
+    if (ville !== undefined) { updates.push('ville = ?'); params.push(ville); }
     if (code_postal !== undefined) { updates.push('code_postal = ?'); params.push(code_postal); }
     if (telephone !== undefined) { updates.push('telephone = ?'); params.push(telephone); }
     if (siret !== undefined) { updates.push('siret = ?'); params.push(siret); }
     if (nom_site !== undefined) { updates.push('nom_site = ?'); params.push(nom_site); }
     if (adresse_travaux !== undefined) { updates.push('adresse_travaux = ?'); params.push(adresse_travaux); }
+    if (ville_travaux !== undefined) { updates.push('ville_travaux = ?'); params.push(ville_travaux); }
     if (code_postal_travaux !== undefined) { updates.push('code_postal_travaux = ?'); params.push(code_postal_travaux); }
     if (nom_signataire !== undefined) { updates.push('nom_signataire = ?'); params.push(nom_signataire); }
     if (fonction !== undefined) { updates.push('fonction = ?'); params.push(fonction); }
@@ -726,19 +729,21 @@ router.post('/import/csv', authenticateToken, requireAdmin, async (req, res) => 
               // Créer client_base
               const baseResult = db.prepare(`
                 INSERT INTO client_base (
-                  societe, adresse, code_postal, telephone, siret,
-                  nom_site, adresse_travaux, code_postal_travaux,
+                  societe, adresse, ville, code_postal, telephone, siret,
+                  nom_site, adresse_travaux, ville_travaux, code_postal_travaux,
                   nom_signataire, fonction, telephone_signataire, mail_signataire,
                   code_naf
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               `).run(
                 row.societe?.trim() || null,
                 row.adresse?.trim() || null,
+                row.ville?.trim() || null,
                 row.code_postal?.trim() || null,
                 row.telephone?.trim() || null,
                 row.siret?.trim() || null,
                 row.nom_site?.trim() || null,
                 row.adresse_travaux?.trim() || null,
+                row.ville_travaux?.trim() || null,
                 row.code_postal_travaux?.trim() || null,
                 row.nom_signataire?.trim() || null,
                 row.fonction?.trim() || null,

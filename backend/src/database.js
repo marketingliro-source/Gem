@@ -50,6 +50,7 @@ if (isMigrated) {
       siret TEXT,
       nom_site TEXT,
       adresse_travaux TEXT,
+      ville_travaux TEXT,
       code_postal_travaux TEXT,
       nom_signataire TEXT,
       fonction TEXT,
