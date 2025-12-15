@@ -22,7 +22,7 @@ const router = express.Router();
 // GET /clients - Liste des clients avec leurs produits
 router.get('/', authenticateToken, (req, res) => {
   try {
-    const { page = 1, limit = 20, search, statut, type_produit, code_naf, code_postal } = req.query;
+    const { page = 1, limit = 20, search, statut, type_produit, code_naf, code_postal, assigned_to } = req.query;
     const offset = (page - 1) * limit;
 
     // Requête avec JOIN entre client_base et clients_produits
@@ -84,6 +84,12 @@ router.get('/', authenticateToken, (req, res) => {
     if (code_postal) {
       conditions.push('cb.code_postal LIKE ?');
       params.push(`%${code_postal}%`);
+    }
+
+    // Filtrer par agent assigné (admin uniquement)
+    if (assigned_to && req.user.role === 'admin') {
+      conditions.push('cp.assigned_to = ?');
+      params.push(parseInt(assigned_to));
     }
 
     // Recherche globale

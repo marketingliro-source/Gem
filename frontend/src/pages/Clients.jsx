@@ -25,6 +25,8 @@ const Clients = () => {
   const [filterProduit, setFilterProduit] = useState(produit || '');
   const [filterCodeNAF, setFilterCodeNAF] = useState('');
   const [filterCodePostal, setFilterCodePostal] = useState('');
+  const [filterAssignedTo, setFilterAssignedTo] = useState('');
+  const [telepros, setTelepros] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
 
@@ -74,8 +76,14 @@ const Clients = () => {
   }, []);
 
   useEffect(() => {
+    if (user?.role === 'admin') {
+      fetchTelepros();
+    }
+  }, [user]);
+
+  useEffect(() => {
     fetchClients();
-  }, [filterStatut, filterProduit, filterCodeNAF, filterCodePostal, pagination.page, pagination.limit]);
+  }, [filterStatut, filterProduit, filterCodeNAF, filterCodePostal, filterAssignedTo, pagination.page, pagination.limit]);
 
   const fetchStatuts = async () => {
     try {
@@ -90,6 +98,15 @@ const Clients = () => {
     }
   };
 
+  const fetchTelepros = async () => {
+    try {
+      const response = await api.get('/users/telepros');
+      setTelepros(response.data);
+    } catch (error) {
+      console.error('Erreur chargement télépros:', error);
+    }
+  };
+
   const fetchClients = async () => {
     try {
       setLoading(true);
@@ -98,6 +115,7 @@ const Clients = () => {
       if (filterProduit) params.append('type_produit', filterProduit);
       if (filterCodeNAF) params.append('code_naf', filterCodeNAF);
       if (filterCodePostal) params.append('code_postal', filterCodePostal);
+      if (filterAssignedTo) params.append('assigned_to', filterAssignedTo);
       if (searchTerm) params.append('search', searchTerm);
       params.append('page', pagination.page);
       params.append('limit', pagination.limit);
@@ -376,6 +394,24 @@ const Clients = () => {
               </option>
             ))}
           </select>
+
+          {user?.role === 'admin' && (
+            <select
+              value={filterAssignedTo}
+              onChange={(e) => {
+                setFilterAssignedTo(e.target.value);
+                setPagination(prev => ({ ...prev, page: 1 }));
+              }}
+              className={styles.statusFilter}
+            >
+              <option value="">Tous les agents</option>
+              {telepros.map(telepro => (
+                <option key={telepro.id} value={telepro.id}>
+                  {telepro.username}
+                </option>
+              ))}
+            </select>
+          )}
 
           <input
             type="text"
