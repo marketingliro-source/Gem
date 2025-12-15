@@ -220,12 +220,12 @@ const Clients = () => {
     setClientToDuplicate(null);
   };
 
-  const handleStatusChange = async (clientId, newStatut) => {
+  const handleStatusChange = async (clientId, produitId, newStatut) => {
     try {
-      await api.patch(`/clients/${clientId}`, { statut: newStatut });
+      await api.patch(`/clients/produits/${produitId}`, { statut: newStatut });
       // Update local state to avoid full refetch
       setClients(prev => prev.map(c =>
-        c.id === clientId ? { ...c, statut: newStatut } : c
+        c.produit_id === produitId ? { ...c, statut: newStatut } : c
       ));
     } catch (error) {
       console.error('Erreur lors du changement de statut:', error);
@@ -542,7 +542,7 @@ const Clients = () => {
                   <td>
                     <select
                       value={client.statut}
-                      onChange={(e) => handleStatusChange(client.id, e.target.value)}
+                      onChange={(e) => handleStatusChange(client.id, client.produit_id, e.target.value)}
                       className={styles.statusSelect}
                       style={{
                         borderColor: getStatutObj(client.statut)?.color || '#10b981'
