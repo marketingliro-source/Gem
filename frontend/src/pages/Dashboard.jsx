@@ -14,20 +14,7 @@ const Dashboard = () => {
   const [period, setPeriod] = useState('month');
   const [statType, setStatType] = useState('clients'); // 'clients' or 'conversion'
   const [selectedTelepro, setSelectedTelepro] = useState('all'); // 'all' or username
-
-  // Définition des 10 statuts avec couleurs
-  const STATUTS = [
-    { key: 'nouveau', label: 'Nouveau', color: '#10b981' },
-    { key: 'a_rappeler', label: 'À Rappeler', color: '#f59e0b' },
-    { key: 'mail_infos_envoye', label: 'Mail Infos Envoyé', color: '#3b82f6' },
-    { key: 'infos_recues', label: 'Infos Reçues', color: '#8b5cf6' },
-    { key: 'devis_envoye', label: 'Devis Envoyé', color: '#ec4899' },
-    { key: 'devis_signe', label: 'Devis Signé', color: '#14b8a6' },
-    { key: 'pose_prevue', label: 'Pose Prévue', color: '#f97316' },
-    { key: 'pose_terminee', label: 'Pose Terminée', color: '#06b6d4' },
-    { key: 'coffrac', label: 'Coffrac', color: '#84cc16' },
-    { key: 'termine', label: 'Terminé', color: '#059669' }
-  ];
+  const [statuts, setStatuts] = useState([]); // Statuts dynamiques chargés depuis l'API
 
   const PRODUITS = [
     { key: 'destratification', label: 'Destratification', color: '#10b981' },
@@ -82,8 +69,18 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
+    fetchStatuts();
     fetchAnalytics();
   }, [period]);
+
+  const fetchStatuts = async () => {
+    try {
+      const response = await api.get('/statuts');
+      setStatuts(response.data);
+    } catch (error) {
+      console.error('Erreur lors du chargement des statuts:', error);
+    }
+  };
 
   const fetchAnalytics = async () => {
     try {
@@ -116,7 +113,7 @@ const Dashboard = () => {
   }
 
   // Préparer les données pour les cartes de statuts
-  const statutsData = STATUTS.map(statut => {
+  const statutsData = statuts.map(statut => {
     const count = data.summary?.par_statut?.find(s => s.statut === statut.key)?.count || 0;
     return { ...statut, count };
   });
@@ -234,12 +231,12 @@ const Dashboard = () => {
                 cy="50%"
                 outerRadius={120}
                 label={(entry) => {
-                  const statut = STATUTS.find(s => s.key === entry.statut);
-                  return `${statut?.label}: ${entry.count}`;
+                  const statut = statuts.find(s => s.key === entry.statut);
+                  return `${statut?.label || entry.statut}: ${entry.count}`;
                 }}
               >
                 {(data.summary?.par_statut || []).map((entry, index) => {
-                  const statut = STATUTS.find(s => s.key === entry.statut);
+                  const statut = statuts.find(s => s.key === entry.statut);
                   return <Cell key={`cell-${index}`} fill={statut?.color || '#999'} />;
                 })}
               </Pie>
@@ -378,7 +375,7 @@ const Dashboard = () => {
               </thead>
               <tbody>
                 {data.recentClients.map(client => {
-                  const statut = STATUTS.find(s => s.key === client.statut);
+                  const statut = statuts.find(s => s.key === client.statut);
                   const produit = PRODUITS.find(p => p.key === client.type_produit);
                   return (
                     <tr key={client.id} onClick={() => navigate(`/clients?id=${client.id}`)} style={{ cursor: 'pointer' }}>
@@ -395,7 +392,7 @@ const Dashboard = () => {
                       <td>
                         <span
                           className={styles.badge}
-                          style={{ backgroundColor: `${statut?.color}20`, color: statut?.color }}
+                          style={{ backgroundColor: `${statut?.color || '#999'}20`, color: statut?.color || '#999' }}
                         >
                           {statut?.label || client.statut}
                         </span>
