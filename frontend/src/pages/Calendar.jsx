@@ -9,6 +9,7 @@ import frLocale from '@fullcalendar/core/locales/fr';
 import { Plus, User } from 'lucide-react';
 import styles from './Calendar.module.css';
 import AddAppointmentModal from '../components/AddAppointmentModal';
+import ClientModal from '../components/ClientModal';
 
 const Calendar = () => {
   const { user } = useAuth();
@@ -18,6 +19,9 @@ const Calendar = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState('');
   const [agents, setAgents] = useState([]);
+  const [showClientModal, setShowClientModal] = useState(false);
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [loadingClient, setLoadingClient] = useState(false);
 
   useEffect(() => {
     fetchAppointments();
@@ -71,6 +75,20 @@ const Calendar = () => {
     }
   };
 
+  const fetchClientAndOpenModal = async (clientBaseId) => {
+    setLoadingClient(true);
+    try {
+      const response = await api.get(`/clients/${clientBaseId}`);
+      setSelectedClient(response.data);
+      setShowClientModal(true);
+    } catch (error) {
+      console.error('Erreur chargement client:', error);
+      alert('Impossible de charger les détails du client');
+    } finally {
+      setLoadingClient(false);
+    }
+  };
+
   const getEventColor = (userId) => {
     const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4'];
     return colors[userId % colors.length];
@@ -95,27 +113,12 @@ const Calendar = () => {
   };
 
   const handleEventClick = (info) => {
-    const event = info.event;
-    const props = event.extendedProps;
+    const props = info.event.extendedProps;
 
-    // Afficher uniquement les détails du rendez-vous
-    let message = `📅 Détails du rendez-vous\n\n` +
-      `📆 Date: ${event.start.toLocaleDateString('fr-FR')}\n` +
-      `🕐 Heure: ${props.time}\n` +
-      `🏢 Entreprise: ${props.leadName}\n` +
-      `👨‍💼 Agent: ${props.agent}`;
-
-    if (props.location) {
-      message += `\n📍 Lieu: ${props.location}`;
+    // Ouvrir la fiche client au lieu d'afficher une alerte
+    if (props.clientBaseId) {
+      fetchClientAndOpenModal(props.clientBaseId);
     }
-
-    if (props.notes) {
-      message += `\n📝 Notes: ${props.notes}`;
-    }
-
-    message += `\n\n💡 Pour déplacer ce rendez-vous:\n→ Glissez-déposez le directement dans le calendrier`;
-
-    alert(message);
   };
 
   const handleDeleteAppointment = async (id) => {
@@ -201,6 +204,17 @@ const Calendar = () => {
           onSuccess={() => {
             fetchAppointments();
             setShowAddModal(false);
+          }}
+        />
+      )}
+
+      {showClientModal && selectedClient && (
+        <ClientModal
+          client={selectedClient}
+          onClose={(shouldRefresh) => {
+            setShowClientModal(false);
+            setSelectedClient(null);
+            if (shouldRefresh) fetchAppointments();
           }}
         />
       )}
