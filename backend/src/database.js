@@ -136,11 +136,9 @@ if (isMigrated) {
     CREATE INDEX IF NOT EXISTS idx_clients_produits_base ON clients_produits(client_base_id);
     CREATE INDEX IF NOT EXISTS idx_clients_produits_statut ON clients_produits(statut);
     CREATE INDEX IF NOT EXISTS idx_clients_produits_assigned ON clients_produits(assigned_to);
-    CREATE INDEX IF NOT EXISTS idx_clients_produits_assigned_at ON clients_produits(assigned_at);
     CREATE INDEX IF NOT EXISTS idx_clients_produits_type ON clients_produits(type_produit);
     CREATE INDEX IF NOT EXISTS idx_client_comments_base ON client_comments(client_base_id);
     CREATE INDEX IF NOT EXISTS idx_client_appointments_base ON client_appointments(client_base_id);
-    CREATE INDEX IF NOT EXISTS idx_client_appointments_produit ON client_appointments(produit_id);
     CREATE INDEX IF NOT EXISTS idx_client_documents_base ON client_documents(client_base_id);
     CREATE INDEX IF NOT EXISTS idx_statuts_active ON statuts(active);
     CREATE INDEX IF NOT EXISTS idx_statuts_ordre ON statuts(ordre);
@@ -305,6 +303,10 @@ if (isMigrated) {
     if (updateResult.changes > 0) {
       console.log(`✓ ${updateResult.changes} lignes mises à jour avec assigned_at = updated_at`);
     }
+
+    // Créer l'index sur assigned_at
+    db.exec('CREATE INDEX IF NOT EXISTS idx_clients_produits_assigned_at ON clients_produits(assigned_at)');
+    console.log('✓ Index sur assigned_at créé');
   } catch (e) {
     // Colonne existe déjà
   }
@@ -332,6 +334,10 @@ if (isMigrated) {
     if (updateResult.changes > 0) {
       console.log(`✓ ${updateResult.changes} RDV liés automatiquement aux produits`);
     }
+
+    // Créer l'index sur produit_id
+    db.exec('CREATE INDEX IF NOT EXISTS idx_client_appointments_produit ON client_appointments(produit_id)');
+    console.log('✓ Index sur produit_id créé');
   } catch (e) {
     // Colonne existe déjà
   }
