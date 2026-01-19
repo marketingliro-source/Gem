@@ -74,6 +74,7 @@ if (isMigrated) {
       donnees_techniques TEXT,
       statut TEXT NOT NULL DEFAULT 'nouveau',
       assigned_to INTEGER,
+      assigned_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (client_base_id) REFERENCES client_base(id) ON DELETE CASCADE,
@@ -95,6 +96,7 @@ if (isMigrated) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       client_base_id INTEGER NOT NULL,
       user_id INTEGER NOT NULL,
+      produit_id INTEGER,
       title TEXT NOT NULL,
       date TEXT NOT NULL,
       time TEXT NOT NULL,
@@ -102,7 +104,8 @@ if (isMigrated) {
       notes TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (client_base_id) REFERENCES client_base(id) ON DELETE CASCADE,
-      FOREIGN KEY (user_id) REFERENCES users(id)
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (produit_id) REFERENCES clients_produits(id) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS client_documents (
@@ -133,9 +136,11 @@ if (isMigrated) {
     CREATE INDEX IF NOT EXISTS idx_clients_produits_base ON clients_produits(client_base_id);
     CREATE INDEX IF NOT EXISTS idx_clients_produits_statut ON clients_produits(statut);
     CREATE INDEX IF NOT EXISTS idx_clients_produits_assigned ON clients_produits(assigned_to);
+    CREATE INDEX IF NOT EXISTS idx_clients_produits_assigned_at ON clients_produits(assigned_at);
     CREATE INDEX IF NOT EXISTS idx_clients_produits_type ON clients_produits(type_produit);
     CREATE INDEX IF NOT EXISTS idx_client_comments_base ON client_comments(client_base_id);
     CREATE INDEX IF NOT EXISTS idx_client_appointments_base ON client_appointments(client_base_id);
+    CREATE INDEX IF NOT EXISTS idx_client_appointments_produit ON client_appointments(produit_id);
     CREATE INDEX IF NOT EXISTS idx_client_documents_base ON client_documents(client_base_id);
     CREATE INDEX IF NOT EXISTS idx_statuts_active ON statuts(active);
     CREATE INDEX IF NOT EXISTS idx_statuts_ordre ON statuts(ordre);
@@ -282,6 +287,54 @@ if (!isMigrated) {
     db.prepare('ALTER TABLE clients ADD COLUMN telephone_contact_site TEXT').run();
     console.log('✓ Colonne telephone_contact_site ajoutée');
   } catch (e) {}
+}
+
+// Migration - Ajouter colonne assigned_at à clients_produits
+if (isMigrated) {
+  try {
+    db.prepare('ALTER TABLE clients_produits ADD COLUMN assigned_at DATETIME').run();
+    console.log('✓ Colonne assigned_at ajoutée à la table clients_produits');
+
+    // Mettre à jour les données existantes
+    const updateResult = db.prepare(`
+      UPDATE clients_produits
+      SET assigned_at = updated_at
+      WHERE assigned_to IS NOT NULL AND assigned_at IS NULL
+    `).run();
+
+    if (updateResult.changes > 0) {
+      console.log(`✓ ${updateResult.changes} lignes mises à jour avec assigned_at = updated_at`);
+    }
+  } catch (e) {
+    // Colonne existe déjà
+  }
+}
+
+// Migration - Ajouter colonne produit_id à client_appointments
+if (isMigrated) {
+  try {
+    db.prepare('ALTER TABLE client_appointments ADD COLUMN produit_id INTEGER').run();
+    console.log('✓ Colonne produit_id ajoutée à la table client_appointments');
+
+    // Lier les RDV existants au premier produit du client
+    const updateResult = db.prepare(`
+      UPDATE client_appointments
+      SET produit_id = (
+        SELECT cp.id
+        FROM clients_produits cp
+        WHERE cp.client_base_id = client_appointments.client_base_id
+        ORDER BY cp.created_at ASC
+        LIMIT 1
+      )
+      WHERE produit_id IS NULL
+    `).run();
+
+    if (updateResult.changes > 0) {
+      console.log(`✓ ${updateResult.changes} RDV liés automatiquement aux produits`);
+    }
+  } catch (e) {
+    // Colonne existe déjà
+  }
 }
 
 // Migration - Insérer les statuts par défaut

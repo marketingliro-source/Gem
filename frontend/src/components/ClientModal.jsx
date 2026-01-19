@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
-import { X, Save, Upload, Download, Trash2, MessageSquare, Calendar, Send, FileText, Eye } from 'lucide-react';
+import { X, Save, Upload, Download, Trash2, MessageSquare, Calendar, Send, FileText, Eye, Edit } from 'lucide-react';
 import SiretAutocomplete from './SiretAutocomplete';
 import styles from './ClientModal.module.css';
 
@@ -24,6 +24,7 @@ const ClientModal = ({ client, onClose }) => {
     location: '',
     notes: ''
   });
+  const [editingAppointment, setEditingAppointment] = useState(null);
   const [previewDocument, setPreviewDocument] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
 
@@ -467,7 +468,11 @@ const ClientModal = ({ client, onClose }) => {
     }
 
     try {
-      await api.post(`/clients/${client.id}/appointments`, newAppointment);
+      // Envoyer le RDV avec le produit_id actuel
+      await api.post(`/clients/${client.id}/appointments`, {
+        ...newAppointment,
+        produit_id: client.produit_id || (client.produits && client.produits[0]?.id) || null
+      });
       setNewAppointment({ title: '', date: '', time: '', location: '', notes: '' });
       fetchAppointments();
       alert('Rendez-vous ajouté avec succès');
@@ -475,6 +480,44 @@ const ClientModal = ({ client, onClose }) => {
       console.error('Erreur ajout rendez-vous:', error);
       alert('Erreur lors de l\'ajout du rendez-vous');
     }
+  };
+
+  const handleEditAppointment = (appointment) => {
+    setEditingAppointment(appointment);
+    setNewAppointment({
+      title: appointment.title || '',
+      date: appointment.date || '',
+      time: appointment.time || '',
+      location: appointment.location || '',
+      notes: appointment.notes || ''
+    });
+  };
+
+  const handleUpdateAppointment = async (e) => {
+    e.preventDefault();
+    if (!newAppointment.title || !newAppointment.date || !newAppointment.time) {
+      alert('Veuillez remplir les champs obligatoires (Titre, Date, Heure)');
+      return;
+    }
+
+    try {
+      await api.patch(`/clients/${client.id}/appointments/${editingAppointment.id}`, {
+        ...newAppointment,
+        produit_id: client.produit_id || (client.produits && client.produits[0]?.id) || null
+      });
+      setNewAppointment({ title: '', date: '', time: '', location: '', notes: '' });
+      setEditingAppointment(null);
+      fetchAppointments();
+      alert('Rendez-vous modifié avec succès');
+    } catch (error) {
+      console.error('Erreur modification rendez-vous:', error);
+      alert('Erreur lors de la modification du rendez-vous');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingAppointment(null);
+    setNewAppointment({ title: '', date: '', time: '', location: '', notes: '' });
   };
 
   const handleDeleteAppointment = async (appointmentId) => {
@@ -1231,8 +1274,22 @@ const ClientModal = ({ client, onClose }) => {
           {/* Onglet Rendez-vous */}
           {activeTab === 'appointments' && (
             <div className={styles.appointmentsTab}>
-              <form onSubmit={handleAddAppointment} className={styles.appointmentForm}>
-                <h4 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: 600 }}>Nouveau Rendez-vous</h4>
+              <form onSubmit={editingAppointment ? handleUpdateAppointment : handleAddAppointment} className={styles.appointmentForm}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h4 style={{ fontSize: '16px', fontWeight: 600 }}>
+                    {editingAppointment ? 'Modifier le rendez-vous' : 'Nouveau rendez-vous'}
+                  </h4>
+                  {editingAppointment && (
+                    <button
+                      type="button"
+                      onClick={handleCancelEdit}
+                      className={styles.iconBtn}
+                      title="Annuler la modification"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
                 <div className={styles.formGrid}>
                   <div className={styles.formGroup}>
                     <label>Titre *</label>
@@ -1287,8 +1344,8 @@ const ClientModal = ({ client, onClose }) => {
                   />
                 </div>
                 <button type="submit" className={styles.saveBtn} style={{ marginTop: '16px' }}>
-                  <Calendar size={18} />
-                  Ajouter le rendez-vous
+                  {editingAppointment ? <Save size={18} /> : <Calendar size={18} />}
+                  {editingAppointment ? 'Enregistrer les modifications' : 'Ajouter le rendez-vous'}
                 </button>
               </form>
 
@@ -1315,13 +1372,22 @@ const ClientModal = ({ client, onClose }) => {
                         <div className={styles.appointmentNotes}>{apt.notes}</div>
                       )}
                     </div>
-                    <button
-                      onClick={() => handleDeleteAppointment(apt.id)}
-                      className={styles.iconBtn}
-                      style={{ alignSelf: 'flex-start' }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', alignSelf: 'flex-start' }}>
+                      <button
+                        onClick={() => handleEditAppointment(apt)}
+                        className={styles.iconBtn}
+                        title="Modifier ce rendez-vous"
+                      >
+                        <Edit size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAppointment(apt.id)}
+                        className={styles.iconBtn}
+                        title="Supprimer ce rendez-vous"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {appointments.length === 0 && (

@@ -58,6 +58,14 @@ const Clients = () => {
     { key: '', label: 'Tous les statuts', color: '#6366f1' }
   ]);
 
+  // Tri multi-colonnes
+  const [sortConfig, setSortConfig] = useState({ field: 'updated_at', order: 'DESC' });
+
+  // Commentaire rapide inline
+  const [inlineCommentClientId, setInlineCommentClientId] = useState(null);
+  const [inlineCommentText, setInlineCommentText] = useState('');
+  const [savingComment, setSavingComment] = useState(false);
+
   const PRODUITS = [
     { key: '', label: 'Tous les produits' },
     { key: 'destratification', label: 'Destratification', color: '#10b981' },
@@ -83,7 +91,7 @@ const Clients = () => {
 
   useEffect(() => {
     fetchClients();
-  }, [filterStatut, filterProduit, filterCodeNAF, filterCodePostal, filterAssignedTo, pagination.page, pagination.limit]);
+  }, [filterStatut, filterProduit, filterCodeNAF, filterCodePostal, filterAssignedTo, pagination.page, pagination.limit, sortConfig]);
 
   const fetchStatuts = async () => {
     try {
@@ -120,6 +128,8 @@ const Clients = () => {
       if (searchTerm) params.append('search', searchTerm);
       params.append('page', pagination.page);
       params.append('limit', pagination.limit);
+      params.append('sort_field', sortConfig.field);
+      params.append('sort_order', sortConfig.order);
 
       const response = await api.get(`/clients?${params.toString()}`);
 
@@ -230,6 +240,53 @@ const Clients = () => {
     } catch (error) {
       console.error('Erreur lors du changement de statut:', error);
       alert('Erreur lors de la mise à jour du statut');
+    }
+  };
+
+  // Tri multi-colonnes
+  const handleSort = (field) => {
+    setSortConfig(prev => ({
+      field,
+      order: prev.field === field && prev.order === 'DESC' ? 'ASC' : 'DESC'
+    }));
+  };
+
+  const getSortIcon = (field) => {
+    if (sortConfig.field !== field) return ' ↕';
+    return sortConfig.order === 'DESC' ? ' ↓' : ' ↑';
+  };
+
+  // Commentaire rapide inline
+  const handleOpenInlineComment = (clientId) => {
+    setInlineCommentClientId(clientId);
+    setInlineCommentText('');
+  };
+
+  const handleCancelInlineComment = () => {
+    setInlineCommentClientId(null);
+    setInlineCommentText('');
+  };
+
+  const handleSaveInlineComment = async (clientId) => {
+    if (!inlineCommentText.trim()) return;
+
+    setSavingComment(true);
+    try {
+      await api.post(`/clients/${clientId}/comments`, {
+        content: inlineCommentText
+      });
+
+      // Rafraîchir les clients pour voir la mise à jour
+      await fetchClients();
+
+      // Fermer le formulaire
+      setInlineCommentClientId(null);
+      setInlineCommentText('');
+    } catch (error) {
+      console.error('Erreur lors de l\'ajout du commentaire:', error);
+      alert('Erreur lors de l\'ajout du commentaire');
+    } finally {
+      setSavingComment(false);
     }
   };
 
@@ -503,14 +560,32 @@ const Clients = () => {
                     onChange={handleSelectAll}
                   />
                 </th>
-                <th>Société</th>
+                <th onClick={() => handleSort('societe')} style={{ cursor: 'pointer' }}>
+                  Société{getSortIcon('societe')}
+                </th>
                 <th>Contact</th>
                 <th>Téléphone</th>
-                <th>Localisation</th>
+                <th onClick={() => handleSort('ville')} style={{ cursor: 'pointer' }}>
+                  Localisation{getSortIcon('ville')}
+                </th>
                 <th>{filterProduit ? 'Code NAF' : 'Produit'}</th>
-                <th>Statut</th>
-                {user?.role === 'admin' && <th>Attribué à</th>}
-                <th>Date</th>
+                <th onClick={() => handleSort('statut')} style={{ cursor: 'pointer' }}>
+                  Statut{getSortIcon('statut')}
+                </th>
+                {user?.role === 'admin' && (
+                  <th onClick={() => handleSort('assigned_to')} style={{ cursor: 'pointer' }}>
+                    Attribué à{getSortIcon('assigned_to')}
+                  </th>
+                )}
+                {user?.role === 'admin' && (
+                  <th onClick={() => handleSort('assigned_at')} style={{ cursor: 'pointer' }}>
+                    Date attribution{getSortIcon('assigned_at')}
+                  </th>
+                )}
+                <th onClick={() => handleSort('updated_at')} style={{ cursor: 'pointer' }}>
+                  Dernière interaction{getSortIcon('updated_at')}
+                </th>
+                <th>Dernier commentaire</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -559,62 +634,83 @@ const Clients = () => {
                   {user?.role === 'admin' && (
                     <td>{client.assigned_username || 'Non attribué'}</td>
                   )}
+                  {user?.role === 'admin' && (
+                    <td className={styles.date}>
+                      {client.assigned_at
+                        ? new Date(client.assigned_at).toLocaleDateString('fr-FR')
+                        : '-'
+                      }
+                    </td>
+                  )}
                   <td className={styles.date}>
-                    {new Date(client.created_at).toLocaleDateString('fr-FR')}
+                    {new Date(client.updated_at).toLocaleDateString('fr-FR')}
+                  </td>
+                  <td>
+                    <div className={styles.lastCommentCell}>
+                      {client.last_comment ? (
+                        <div className={styles.lastCommentText}>
+                          {client.last_comment}
+                        </div>
+                      ) : (
+                        <span className={styles.noComment}>-</span>
+                      )}
+                    </div>
                   </td>
                   <td>
                     <div className={styles.actionsCell}>
-                      <div
-                        className={styles.commentIconWrapper}
-                        onMouseEnter={() => handleCommentHover(client.id)}
-                        onMouseLeave={() => setHoveredClient(null)}
-                      >
-                        <MessageSquare size={18} className={styles.commentIcon} />
-
-                        {hoveredClient === client.id && clientComments[client.id] && (
-                          <div className={styles.commentTooltip}>
-                            {clientComments[client.id].length === 0 ? (
-                              <div className={styles.noComments}>Aucun commentaire</div>
-                            ) : (
-                              clientComments[client.id].map((comment, index) => (
-                                <div key={comment.id || index} className={styles.commentItem}>
-                                  <div className={styles.commentText}>
-                                    {comment.content.length > 80
-                                      ? `${comment.content.substring(0, 80)}...`
-                                      : comment.content}
-                                  </div>
-                                  <div className={styles.commentMeta}>
-                                    {comment.username} · {new Date(comment.created_at).toLocaleDateString('fr-FR', {
-                                      day: '2-digit',
-                                      month: '2-digit',
-                                      year: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}
-                                  </div>
-                                </div>
-                              ))
-                            )}
+                      {inlineCommentClientId === client.id ? (
+                        <div className={styles.inlineCommentForm}>
+                          <textarea
+                            value={inlineCommentText}
+                            onChange={(e) => setInlineCommentText(e.target.value)}
+                            placeholder="Votre commentaire..."
+                            className={styles.inlineCommentTextarea}
+                            autoFocus
+                          />
+                          <div className={styles.inlineCommentButtons}>
+                            <button
+                              onClick={() => handleSaveInlineComment(client.id)}
+                              disabled={!inlineCommentText.trim() || savingComment}
+                              className={styles.btnSaveComment}
+                            >
+                              {savingComment ? 'Envoi...' : 'Envoyer'}
+                            </button>
+                            <button
+                              onClick={handleCancelInlineComment}
+                              disabled={savingComment}
+                              className={styles.btnCancelComment}
+                            >
+                              Annuler
+                            </button>
                           </div>
-                        )}
-                      </div>
-
-                      <button
-                        onClick={() => handleEditClient(client)}
-                        className={styles.btnView}
-                      >
-                        Voir
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDuplicateClient(client);
-                        }}
-                        className={styles.btnSecondary}
-                        title="Dupliquer ce client"
-                      >
-                        <Copy size={16} />
-                      </button>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleOpenInlineComment(client.id)}
+                            className={styles.btnComment}
+                            title="Ajouter un commentaire rapide"
+                          >
+                            + Commentaire
+                          </button>
+                          <button
+                            onClick={() => handleEditClient(client)}
+                            className={styles.btnView}
+                          >
+                            Voir
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDuplicateClient(client);
+                            }}
+                            className={styles.btnSecondary}
+                            title="Dupliquer ce client"
+                          >
+                            <Copy size={16} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

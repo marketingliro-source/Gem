@@ -38,15 +38,32 @@ const Calendar = () => {
         // Construire le nom à afficher (société ou nom du signataire)
         const displayName = apt.societe || apt.nom_signataire || apt.title || 'Sans nom';
 
+        // Labels pour produit et statut
+        const produitLabels = {
+          'destratification': '🌡️ Destrat',
+          'pression': '💨 Pression',
+          'matelas_isolants': '🧱 Matelas'
+        };
+        const produitLabel = apt.type_produit ? produitLabels[apt.type_produit] || apt.type_produit : '';
+
+        // Construire le titre avec le produit si disponible
+        const titleParts = [`${apt.time} - ${displayName}`];
+        if (produitLabel) {
+          titleParts.push(produitLabel);
+        }
+
         return {
           id: apt.id,
-          title: `${apt.time} - ${displayName}`,
+          title: titleParts.join(' • '),
           start: `${apt.date}T${apt.time}`,
           extendedProps: {
             leadName: displayName,
             agent: apt.username,
             time: apt.time,
             clientBaseId: apt.client_base_id,
+            produitId: apt.produit_id,
+            typeProduit: apt.type_produit,
+            statut: apt.statut,
             location: apt.location,
             notes: apt.notes
           },

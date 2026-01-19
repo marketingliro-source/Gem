@@ -13,6 +13,7 @@ router.get('/', authenticateToken, (req, res) => {
       SELECT
         client_appointments.id,
         client_appointments.client_base_id,
+        client_appointments.produit_id,
         client_appointments.title,
         client_appointments.date,
         client_appointments.time,
@@ -21,10 +22,13 @@ router.get('/', authenticateToken, (req, res) => {
         client_appointments.created_at,
         client_base.societe,
         client_base.nom_signataire,
-        users.username
+        users.username,
+        cp.type_produit,
+        cp.statut
       FROM client_appointments
       JOIN client_base ON client_appointments.client_base_id = client_base.id
       JOIN users ON client_appointments.user_id = users.id
+      LEFT JOIN clients_produits cp ON client_appointments.produit_id = cp.id
       WHERE 1=1
     `;
     let params = [];
@@ -60,7 +64,7 @@ router.get('/', authenticateToken, (req, res) => {
 // Créer un nouveau RDV
 router.post('/', authenticateToken, (req, res) => {
   try {
-    const { client_base_id, title, date, time, location, notes } = req.body;
+    const { client_base_id, produit_id, title, date, time, location, notes } = req.body;
 
     // Validation des champs requis
     if (!client_base_id || !title || !date || !time) {
@@ -75,13 +79,22 @@ router.post('/', authenticateToken, (req, res) => {
       return res.status(404).json({ error: 'Client introuvable' });
     }
 
+    // Vérifier que le produit existe et appartient bien au client (si fourni)
+    if (produit_id) {
+      const produit = db.prepare('SELECT id FROM clients_produits WHERE id = ? AND client_base_id = ?').get(produit_id, client_base_id);
+      if (!produit) {
+        return res.status(400).json({ error: 'Produit invalide ou n\'appartient pas à ce client' });
+      }
+    }
+
     // Créer le rendez-vous
     const result = db.prepare(`
-      INSERT INTO client_appointments (client_base_id, user_id, title, date, time, location, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO client_appointments (client_base_id, user_id, produit_id, title, date, time, location, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       client_base_id,
       req.user.id, // L'utilisateur connecté est assigné au RDV
+      produit_id || null,
       title,
       date,
       time,
@@ -94,6 +107,7 @@ router.post('/', authenticateToken, (req, res) => {
       SELECT
         client_appointments.id,
         client_appointments.client_base_id,
+        client_appointments.produit_id,
         client_appointments.title,
         client_appointments.date,
         client_appointments.time,
@@ -102,10 +116,13 @@ router.post('/', authenticateToken, (req, res) => {
         client_appointments.created_at,
         client_base.societe,
         client_base.nom_signataire,
-        users.username
+        users.username,
+        cp.type_produit,
+        cp.statut
       FROM client_appointments
       JOIN client_base ON client_appointments.client_base_id = client_base.id
       JOIN users ON client_appointments.user_id = users.id
+      LEFT JOIN clients_produits cp ON client_appointments.produit_id = cp.id
       WHERE client_appointments.id = ?
     `).get(result.lastInsertRowid);
 

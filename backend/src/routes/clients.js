@@ -22,7 +22,7 @@ const router = express.Router();
 // GET /clients - Liste des clients avec leurs produits
 router.get('/', authenticateToken, (req, res) => {
   try {
-    const { page = 1, limit = 20, search, statut, type_produit, code_naf, code_postal, assigned_to } = req.query;
+    const { page = 1, limit = 20, search, statut, type_produit, code_naf, code_postal, assigned_to, sort_field = 'updated_at', sort_order = 'DESC' } = req.query;
     const offset = (page - 1) * limit;
 
     // Requête avec JOIN entre client_base et clients_produits
@@ -41,7 +41,10 @@ router.get('/', authenticateToken, (req, res) => {
         cp.donnees_techniques,
         cp.statut,
         cp.assigned_to,
-        u.username as assigned_username
+        cp.assigned_at,
+        u.username as assigned_username,
+        (SELECT content FROM client_comments WHERE client_base_id = cb.id ORDER BY created_at DESC LIMIT 1) as last_comment,
+        (SELECT created_at FROM client_comments WHERE client_base_id = cb.id ORDER BY created_at DESC LIMIT 1) as last_comment_date
       FROM client_base cb
       INNER JOIN clients_produits cp ON cb.id = cp.client_base_id
       LEFT JOIN users u ON cp.assigned_to = u.id
@@ -106,8 +109,23 @@ router.get('/', authenticateToken, (req, res) => {
       countQuery += whereClause;
     }
 
+    // Tri dynamique avec colonnes autorisées
+    const allowedSortFields = {
+      'updated_at': 'cb.updated_at',
+      'created_at': 'cb.created_at',
+      'societe': 'cb.societe',
+      'statut': 'cp.statut',
+      'assigned_to': 'u.username',
+      'assigned_at': 'cp.assigned_at',
+      'type_produit': 'cp.type_produit',
+      'ville': 'cb.ville'
+    };
+
+    const sortColumn = allowedSortFields[sort_field] || 'cb.updated_at';
+    const sortDirection = sort_order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
     // Tri et pagination
-    query += ' ORDER BY cb.updated_at DESC, cp.type_produit ASC LIMIT ? OFFSET ?';
+    query += ` ORDER BY ${sortColumn} ${sortDirection}, cp.type_produit ASC LIMIT ? OFFSET ?`;
 
     const results = db.prepare(query).all(...params, parseInt(limit), offset);
     const total = db.prepare(countQuery).get(...params).total;
@@ -140,6 +158,9 @@ router.get('/', authenticateToken, (req, res) => {
       statut: row.statut,
       assigned_to: row.assigned_to,
       assigned_username: row.assigned_username,
+      assigned_at: row.assigned_at,
+      last_comment: row.last_comment,
+      last_comment_date: row.last_comment_date,
       donnees_techniques: row.donnees_techniques ? JSON.parse(row.donnees_techniques) : null,
       donnees_enrichies: row.donnees_enrichies ? JSON.parse(row.donnees_enrichies) : null,
       created_at: row.created_at,
@@ -642,24 +663,96 @@ router.get('/:id/appointments', authenticateToken, (req, res) => {
 router.post('/:id/appointments', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
-    const { title, date, time } = req.body;
+    const { produit_id, title, date, time, location, notes } = req.body;
 
     if (!title || !date || !time) {
       return res.status(400).json({ error: 'Titre, date et heure requis' });
     }
 
+    // Vérifier que le produit existe et appartient bien au client (si fourni)
+    if (produit_id) {
+      const produit = db.prepare('SELECT id FROM clients_produits WHERE id = ? AND client_base_id = ?').get(produit_id, id);
+      if (!produit) {
+        return res.status(400).json({ error: 'Produit invalide ou n\'appartient pas à ce client' });
+      }
+    }
+
     const result = db.prepare(
-      'INSERT INTO client_appointments (client_base_id, user_id, title, date, time) VALUES (?, ?, ?, ?, ?)'
-    ).run(id, req.user.id, title, date, time);
+      'INSERT INTO client_appointments (client_base_id, user_id, produit_id, title, date, time, location, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(id, req.user.id, produit_id || null, title, date, time, location || null, notes || null);
 
     res.status(201).json({
       id: result.lastInsertRowid,
       client_base_id: id,
       user_id: req.user.id,
+      produit_id,
       title,
       date,
-      time
+      time,
+      location,
+      notes
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.patch('/:id/appointments/:appointmentId', authenticateToken, (req, res) => {
+  try {
+    const { id, appointmentId } = req.params;
+    const { produit_id, title, date, time, location, notes } = req.body;
+
+    // Vérifier que le RDV existe et appartient au client
+    const rdv = db.prepare('SELECT id FROM client_appointments WHERE id = ? AND client_base_id = ?').get(appointmentId, id);
+    if (!rdv) {
+      return res.status(404).json({ error: 'Rendez-vous introuvable ou n\'appartient pas à ce client' });
+    }
+
+    // Vérifier que le produit existe et appartient bien au client (si fourni)
+    if (produit_id) {
+      const produit = db.prepare('SELECT id FROM clients_produits WHERE id = ? AND client_base_id = ?').get(produit_id, id);
+      if (!produit) {
+        return res.status(400).json({ error: 'Produit invalide ou n\'appartient pas à ce client' });
+      }
+    }
+
+    // Construire la requête UPDATE dynamiquement
+    const updates = [];
+    const params = [];
+
+    if (produit_id !== undefined) {
+      updates.push('produit_id = ?');
+      params.push(produit_id || null);
+    }
+    if (title !== undefined) {
+      updates.push('title = ?');
+      params.push(title);
+    }
+    if (date !== undefined) {
+      updates.push('date = ?');
+      params.push(date);
+    }
+    if (time !== undefined) {
+      updates.push('time = ?');
+      params.push(time);
+    }
+    if (location !== undefined) {
+      updates.push('location = ?');
+      params.push(location || null);
+    }
+    if (notes !== undefined) {
+      updates.push('notes = ?');
+      params.push(notes || null);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'Aucune modification fournie' });
+    }
+
+    params.push(appointmentId);
+    db.prepare(`UPDATE client_appointments SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+
+    res.json({ message: 'Rendez-vous modifié avec succès' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -905,7 +998,7 @@ router.patch('/:id/assign', authenticateToken, requireAdmin, (req, res) => {
       return res.status(404).json({ error: 'Produit non trouvé' });
     }
 
-    db.prepare('UPDATE clients_produits SET assigned_to = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    db.prepare('UPDATE clients_produits SET assigned_to = ?, assigned_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
       .run(userId, id);
 
     res.json({ message: 'Produit attribué avec succès' });
@@ -938,7 +1031,7 @@ router.post('/bulk-assign', authenticateToken, requireAdmin, (req, res) => {
     const placeholders = clientIds.map(() => '?').join(',');
     const updateQuery = `
       UPDATE clients_produits
-      SET assigned_to = ?, updated_at = CURRENT_TIMESTAMP
+      SET assigned_to = ?, assigned_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
       WHERE id IN (${placeholders})
     `;
 
