@@ -92,11 +92,18 @@ const Calendar = () => {
     }
   };
 
-  const fetchClientAndOpenModal = async (clientBaseId) => {
+  const fetchClientAndOpenModal = async (clientBaseId, produitId = null) => {
     setLoadingClient(true);
     try {
       const response = await api.get(`/clients/${clientBaseId}`);
-      setSelectedClient(response.data);
+      const clientData = response.data;
+
+      // Ajouter produit_id au client pour que ClientModal sache quel produit afficher
+      if (produitId) {
+        clientData.produit_id = produitId;
+      }
+
+      setSelectedClient(clientData);
       setShowClientModal(true);
     } catch (error) {
       console.error('Erreur chargement client:', error);
@@ -132,9 +139,9 @@ const Calendar = () => {
   const handleEventClick = (info) => {
     const props = info.event.extendedProps;
 
-    // Ouvrir la fiche client au lieu d'afficher une alerte
+    // Ouvrir la fiche client avec le produit spécifique du RDV
     if (props.clientBaseId) {
-      fetchClientAndOpenModal(props.clientBaseId);
+      fetchClientAndOpenModal(props.clientBaseId, props.produitId);
     }
   };
 

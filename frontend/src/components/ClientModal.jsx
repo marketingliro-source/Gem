@@ -30,7 +30,26 @@ const ClientModal = ({ client, onClose }) => {
 
   // Multi-produits : stocker tous les produits du client
   const [clientProduits, setClientProduits] = useState([]);
-  const [currentProduitId, setCurrentProduitId] = useState(client?.produit_id || null);
+  // Initialiser currentProduitId avec le produit du RDV (si fourni) ou le premier produit disponible
+  const [currentProduitId, setCurrentProduitId] = useState(
+    client?.produit_id || (client?.produits && client.produits[0]?.id) || null
+  );
+
+  // Helper: récupérer le produit courant depuis la liste des produits
+  const getCurrentProduit = () => {
+    if (!client?.produits || client.produits.length === 0) return null;
+
+    // Si produit_id est spécifié (depuis RDV), utiliser celui-là
+    if (client.produit_id) {
+      const found = client.produits.find(p => p.id === client.produit_id);
+      if (found) return found;
+    }
+
+    // Sinon, prendre le premier produit
+    return client.produits[0];
+  };
+
+  const currentProduit = getCurrentProduit();
 
   const [formData, setFormData] = useState({
     // Bénéficiaire
@@ -46,7 +65,7 @@ const ClientModal = ({ client, onClose }) => {
     adresse_travaux: client?.adresse_travaux || '',
     ville_travaux: client?.ville_travaux || '',
     code_postal_travaux: client?.code_postal_travaux || '',
-    
+
     // Contact Signataire
     nom_signataire: client?.nom_signataire || '',
     fonction: client?.fonction || '',
@@ -60,40 +79,43 @@ const ClientModal = ({ client, onClose }) => {
     mail_contact_site: client?.mail_contact_site || '',
     telephone_contact_site: client?.telephone_contact_site || '',
 
-    // Produit
-    type_produit: client?.type_produit || 'destratification',
+    // Produit - Utiliser le produit courant du RDV si disponible
+    type_produit: currentProduit?.type_produit || client?.type_produit || 'destratification',
     code_naf: client?.code_naf || '',
-    statut: client?.statut || 'nouveau',
-    
+    statut: currentProduit?.statut || client?.statut || 'nouveau',
+
     // Données techniques (JSON)
-    donnees_techniques: client?.donnees_techniques || {}
+    donnees_techniques: currentProduit?.donnees_techniques || client?.donnees_techniques || {}
   });
+
+  // Utiliser les données techniques du produit courant
+  const produitTechData = currentProduit?.donnees_techniques || client?.donnees_techniques || {};
 
   const [technicalData, setTechnicalData] = useState({
     // Destratification
-    hauteur_max: client?.donnees_techniques?.hauteur_max || '',
-    m2_hors_bureau: client?.donnees_techniques?.m2_hors_bureau || '',
-    type_chauffage: client?.donnees_techniques?.type_chauffage || '',
-    nb_chauffage: client?.donnees_techniques?.nb_chauffage || '',
-    puissance_totale: client?.donnees_techniques?.puissance_totale || '',
-    marque_chauffage: client?.donnees_techniques?.marque_chauffage || '',
-    nb_zones: client?.donnees_techniques?.nb_zones || '',
+    hauteur_max: produitTechData?.hauteur_max || '',
+    m2_hors_bureau: produitTechData?.m2_hors_bureau || '',
+    type_chauffage: produitTechData?.type_chauffage || '',
+    nb_chauffage: produitTechData?.nb_chauffage || '',
+    puissance_totale: produitTechData?.puissance_totale || '',
+    marque_chauffage: produitTechData?.marque_chauffage || '',
+    nb_zones: produitTechData?.nb_zones || '',
 
     // Matelas
-    chaufferie: client?.donnees_techniques?.chaufferie || '',
-    calorifuge: client?.donnees_techniques?.calorifuge || '',
-    ps_estimes: client?.donnees_techniques?.ps_estimes || ''
+    chaufferie: produitTechData?.chaufferie || '',
+    calorifuge: produitTechData?.calorifuge || '',
+    ps_estimes: produitTechData?.ps_estimes || ''
   });
 
-  // Groupes de pression dynamiques
+  // Groupes de pression dynamiques - utiliser produitTechData
   const initGroupesPression = () => {
-    if (client?.donnees_techniques?.groupes_pression && Array.isArray(client.donnees_techniques.groupes_pression)) {
-      return client.donnees_techniques.groupes_pression;
+    if (produitTechData?.groupes_pression && Array.isArray(produitTechData.groupes_pression)) {
+      return produitTechData.groupes_pression;
     }
     // Migration: si ancien format (nb_groupes/puissance_totale_pression)
-    if (client?.donnees_techniques?.nb_groupes || client?.donnees_techniques?.puissance_totale_pression) {
-      const nbGroupes = parseInt(client.donnees_techniques.nb_groupes) || 1;
-      const puissanceTotal = parseFloat(client.donnees_techniques.puissance_totale_pression) || 0;
+    if (produitTechData?.nb_groupes || produitTechData?.puissance_totale_pression) {
+      const nbGroupes = parseInt(produitTechData.nb_groupes) || 1;
+      const puissanceTotal = parseFloat(produitTechData.puissance_totale_pression) || 0;
       return Array.from({ length: nbGroupes }, (_, i) => ({
         numero: i + 1,
         puissance: i === 0 ? puissanceTotal : 0
