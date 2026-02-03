@@ -1090,3 +1090,214 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+
+/* ========================================
+   AMÉLIORATIONS UX - COLONNES STICKY & PAGINATION DOUBLE
+   ======================================== */
+
+/* Container avec hauteur fixe et scroll vertical */
+.tableContainer {
+  max-height: calc(100vh - 320px); /* Ajusté pour laisser place au header et pagination */
+  overflow-x: auto;
+  overflow-y: auto; /* Scroll vertical activé */
+  position: relative;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+}
+
+/* Colonnes sticky - Checkbox */
+.stickyCheckbox {
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 3;
+  background: var(--bg-secondary) !important;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Colonnes sticky - Société */
+.stickySociete {
+  position: sticky !important;
+  left: 40px !important; /* Largeur de la colonne checkbox */
+  z-index: 3;
+  background: var(--bg-secondary) !important;
+  min-width: 150px !important;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Colonnes sticky - Actions */
+.stickyActions {
+  position: sticky !important;
+  right: 0 !important;
+  z-index: 3;
+  background: var(--bg-secondary) !important;
+  box-shadow: -2px 0 4px rgba(0, 0, 0, 0.05);
+  min-width: 150px !important;
+}
+
+/* Header sticky */
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: rgba(16, 185, 129, 0.05) !important;
+}
+
+/* Combinaison header + colonnes sticky */
+.table thead th.stickyCheckbox,
+.table thead th.stickySociete,
+.table thead th.stickyActions {
+  z-index: 5 !important; /* Plus haut que les autres pour rester au-dessus */
+}
+
+/* Style hover amélioré pour lignes avec colonnes sticky */
+.table tbody tr:hover td.stickyCheckbox,
+.table tbody tr:hover td.stickySociete,
+.table tbody tr:hover td.stickyActions {
+  background: rgba(16, 185, 129, 0.04) !important;
+}
+
+/* Lignes sélectionnées avec colonnes sticky */
+.table tbody tr.selected td.stickyCheckbox,
+.table tbody tr.selected td.stickySociete,
+.table tbody tr.selected td.stickyActions {
+  background: rgba(16, 185, 129, 0.08) !important;
+}
+
+/* ========================================
+   PAGINATION EN HAUT (COMPACTE)
+   ======================================== */
+
+.paginationTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  gap: 20px;
+}
+
+.paginationInfo {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.totalCount {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.paginationControls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pageBtnCompact {
+  padding: 6px 10px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 8px;
+  color: var(--accent-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pageBtnCompact:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.2);
+  transform: translateY(-1px);
+}
+
+.pageBtnCompact:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pageInfoCompact {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: 0 10px;
+}
+
+.limitSelectorCompact {
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border-color);
+}
+
+.limitSelectCompact {
+  padding: 5px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.limitSelectCompact:hover {
+  border-color: var(--accent-primary);
+}
+
+.limitSelectCompact:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+/* ========================================
+   OPTIMISATION COLONNE COMMENTAIRE
+   ======================================== */
+
+.lastCommentCell {
+  max-width: 250px;
+  min-width: 180px;
+  position: relative;
+}
+
+.lastCommentText {
+  max-width: 250px;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.4;
+  border: 1px solid var(--border-color);
+  cursor: help;
+  position: relative;
+  /* Suppression du scroll horizontal */
+  overflow: hidden !important;
+  white-space: normal !important; /* Permet le wrap du texte */
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2; /* Limite à 2 lignes */
+  -webkit-box-orient: vertical;
+}
+
+.commentContent {
+  display: block;
+}
+
+.commentMore {
+  color: var(--accent-primary);
+  font-weight: 600;
+  margin-left: 2px;
+}
+
+.noComment {
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: 13px;
+}

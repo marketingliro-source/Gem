@@ -544,6 +544,55 @@ const Clients = () => {
         </div>
       )}
 
+      {/* Pagination en haut */}
+      {pagination.total > 0 && !loading && (
+        <div className={`${styles.pagination} ${styles.paginationTop}`}>
+          <div className={styles.paginationInfo}>
+            <span className={styles.totalCount}>
+              {pagination.total} client{pagination.total > 1 ? 's' : ''} trouvé{pagination.total > 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className={styles.paginationControls}>
+            <button
+              onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
+              disabled={pagination.page === 1}
+              className={styles.pageBtnCompact}
+              title="Page précédente"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className={styles.pageInfoCompact}>
+              Page {pagination.page}/{pagination.pages}
+            </span>
+            <button
+              onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+              disabled={pagination.page === pagination.pages}
+              className={styles.pageBtnCompact}
+              title="Page suivante"
+            >
+              <ChevronRight size={16} />
+            </button>
+            <div className={styles.limitSelectorCompact}>
+              <select
+                value={pagination.limit === pagination.total ? 'all' : pagination.limit}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const newLimit = value === 'all' ? pagination.total : parseInt(value);
+                  setPagination(prev => ({ ...prev, limit: newLimit, page: 1 }));
+                }}
+                className={styles.limitSelectCompact}
+                title="Nombre de résultats par page"
+              >
+                <option value="20">20/page</option>
+                <option value="50">50/page</option>
+                <option value="100">100/page</option>
+                <option value="all">Tous</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className={styles.tableContainer}>
         {loading ? (
           <div className={styles.loading}>Chargement...</div>
@@ -553,14 +602,14 @@ const Clients = () => {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th>
+                <th className={styles.stickyCheckbox}>
                   <input
                     type="checkbox"
                     checked={selectedClients.length === filteredClients.length && filteredClients.length > 0}
                     onChange={handleSelectAll}
                   />
                 </th>
-                <th onClick={() => handleSort('societe')} style={{ cursor: 'pointer' }}>
+                <th className={styles.stickySociete} onClick={() => handleSort('societe')} style={{ cursor: 'pointer' }}>
                   Société{getSortIcon('societe')}
                 </th>
                 <th>Contact</th>
@@ -586,7 +635,7 @@ const Clients = () => {
                   Dernière interaction{getSortIcon('updated_at')}
                 </th>
                 <th>Dernier commentaire</th>
-                <th>Actions</th>
+                <th className={styles.stickyActions}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -595,14 +644,14 @@ const Clients = () => {
                   key={client.id}
                   className={selectedClients.includes(client.produit_id) ? styles.selected : ''}
                 >
-                  <td>
+                  <td className={styles.stickyCheckbox}>
                     <input
                       type="checkbox"
                       checked={selectedClients.includes(client.produit_id)}
                       onChange={() => handleSelectClient(client.produit_id)}
                     />
                   </td>
-                  <td className={styles.name}>{client.societe || '-'}</td>
+                  <td className={`${styles.name} ${styles.stickySociete}`}>{client.societe || '-'}</td>
                   <td>{client.nom_signataire || '-'}</td>
                   <td>{client.telephone || '-'}</td>
                   <td>
@@ -648,15 +697,25 @@ const Clients = () => {
                   <td>
                     <div className={styles.lastCommentCell}>
                       {client.last_comment ? (
-                        <div className={styles.lastCommentText}>
-                          {client.last_comment}
+                        <div
+                          className={styles.lastCommentText}
+                          title={client.last_comment}
+                        >
+                          <span className={styles.commentContent}>
+                            {client.last_comment.length > 100
+                              ? `${client.last_comment.substring(0, 100)}...`
+                              : client.last_comment}
+                          </span>
+                          {client.last_comment.length > 100 && (
+                            <span className={styles.commentMore}>...</span>
+                          )}
                         </div>
                       ) : (
                         <span className={styles.noComment}>-</span>
                       )}
                     </div>
                   </td>
-                  <td>
+                  <td className={styles.stickyActions}>
                     <div className={styles.actionsCell}>
                       {inlineCommentClientId === client.id ? (
                         <div className={styles.inlineCommentForm}>
