@@ -602,14 +602,14 @@ const Clients = () => {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th className={styles.stickyCheckbox}>
+                <th>
                   <input
                     type="checkbox"
                     checked={selectedClients.length === filteredClients.length && filteredClients.length > 0}
                     onChange={handleSelectAll}
                   />
                 </th>
-                <th className={styles.stickySociete} onClick={() => handleSort('societe')} style={{ cursor: 'pointer' }}>
+                <th onClick={() => handleSort('societe')} style={{ cursor: 'pointer' }}>
                   Société{getSortIcon('societe')}
                 </th>
                 <th>Contact</th>
@@ -635,7 +635,7 @@ const Clients = () => {
                   Dernière interaction{getSortIcon('updated_at')}
                 </th>
                 <th>Dernier commentaire</th>
-                <th className={styles.stickyActions}>Actions</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -644,14 +644,14 @@ const Clients = () => {
                   key={client.id}
                   className={selectedClients.includes(client.produit_id) ? styles.selected : ''}
                 >
-                  <td className={styles.stickyCheckbox}>
+                  <td>
                     <input
                       type="checkbox"
                       checked={selectedClients.includes(client.produit_id)}
                       onChange={() => handleSelectClient(client.produit_id)}
                     />
                   </td>
-                  <td className={`${styles.name} ${styles.stickySociete}`}>{client.societe || '-'}</td>
+                  <td className={styles.name}>{client.societe || '-'}</td>
                   <td>{client.nom_signataire || '-'}</td>
                   <td>{client.telephone || '-'}</td>
                   <td>
@@ -715,7 +715,7 @@ const Clients = () => {
                       )}
                     </div>
                   </td>
-                  <td className={styles.stickyActions}>
+                  <td>
                     <div className={styles.actionsCell}>
                       {inlineCommentClientId === client.id ? (
                         <div className={styles.inlineCommentForm}>

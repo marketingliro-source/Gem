@@ -1107,7 +1107,7 @@
   background: var(--bg-secondary);
 }
 
-/* Colonnes sticky - Checkbox */
+/* Colonnes sticky - DÉSACTIVÉ
 .stickyCheckbox {
   position: sticky !important;
   left: 0 !important;
@@ -1116,17 +1116,15 @@
   box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
 }
 
-/* Colonnes sticky - Société */
 .stickySociete {
   position: sticky !important;
-  left: 40px !important; /* Largeur de la colonne checkbox */
+  left: 40px !important;
   z-index: 3;
   background: var(--bg-secondary) !important;
   min-width: 150px !important;
   box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
 }
 
-/* Colonnes sticky - Actions */
 .stickyActions {
   position: sticky !important;
   right: 0 !important;
@@ -1135,34 +1133,34 @@
   box-shadow: -2px 0 4px rgba(0, 0, 0, 0.05);
   min-width: 150px !important;
 }
+*/
 
-/* Header sticky */
+/* Header sticky avec fond opaque */
 .table thead th {
   position: sticky;
   top: 0;
-  z-index: 4;
-  background: rgba(16, 185, 129, 0.05) !important;
+  z-index: 10;
+  /* Fond opaque pour éviter la transparence */
+  background: linear-gradient(to bottom,
+    var(--bg-secondary) 0%,
+    var(--bg-secondary) 95%,
+    rgba(16, 185, 129, 0.1) 100%) !important;
+  backdrop-filter: blur(10px);
+  border-bottom: 2px solid rgba(16, 185, 129, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* Combinaison header + colonnes sticky */
-.table thead th.stickyCheckbox,
-.table thead th.stickySociete,
-.table thead th.stickyActions {
-  z-index: 5 !important; /* Plus haut que les autres pour rester au-dessus */
+/* Amélioration du contraste du texte dans le header */
+.table thead th {
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-/* Style hover amélioré pour lignes avec colonnes sticky */
-.table tbody tr:hover td.stickyCheckbox,
-.table tbody tr:hover td.stickySociete,
-.table tbody tr:hover td.stickyActions {
-  background: rgba(16, 185, 129, 0.04) !important;
-}
-
-/* Lignes sélectionnées avec colonnes sticky */
-.table tbody tr.selected td.stickyCheckbox,
-.table tbody tr.selected td.stickySociete,
-.table tbody tr.selected td.stickyActions {
-  background: rgba(16, 185, 129, 0.08) !important;
+/* Header au hover */
+.table thead th:hover {
+  background: linear-gradient(to bottom,
+    var(--bg-secondary) 0%,
+    rgba(16, 185, 129, 0.08) 100%) !important;
 }
 
 /* ========================================
