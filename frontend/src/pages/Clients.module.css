@@ -1299,3 +1299,56 @@
   font-style: italic;
   font-size: 13px;
 }
+
+/* ========================================
+   BARRES DE SCROLL HORIZONTALES PERSONNALISÉES
+   ======================================== */
+
+.scrollBarContainer {
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 4px;
+  margin: 8px 0;
+}
+
+.scrollBar {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 20px;
+  /* Style de la scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-primary) rgba(16, 185, 129, 0.1);
+}
+
+.scrollBar::-webkit-scrollbar {
+  height: 14px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 7px;
+}
+
+.scrollBar::-webkit-scrollbar-track {
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 7px;
+}
+
+.scrollBar::-webkit-scrollbar-thumb {
+  background: var(--accent-primary);
+  border-radius: 7px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.scrollBar::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.8);
+  background-clip: content-box;
+}
+
+.scrollBarContent {
+  height: 1px;
+  /* La largeur sera définie dynamiquement par JavaScript */
+  min-width: 100%;
+}

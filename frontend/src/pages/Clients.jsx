@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import {
@@ -66,6 +66,26 @@ const Clients = () => {
   const [inlineCommentText, setInlineCommentText] = useState('');
   const [savingComment, setSavingComment] = useState(false);
 
+  // Refs pour synchronisation des scrolls
+  const tableContainerRef = useRef(null);
+  const topScrollRef = useRef(null);
+  const bottomScrollRef = useRef(null);
+
+  // Synchroniser les scrolls
+  const syncScroll = (source) => {
+    const scrollLeft = source.current?.scrollLeft || 0;
+
+    if (tableContainerRef.current && source !== tableContainerRef) {
+      tableContainerRef.current.scrollLeft = scrollLeft;
+    }
+    if (topScrollRef.current && source !== topScrollRef) {
+      topScrollRef.current.scrollLeft = scrollLeft;
+    }
+    if (bottomScrollRef.current && source !== bottomScrollRef) {
+      bottomScrollRef.current.scrollLeft = scrollLeft;
+    }
+  };
+
   const PRODUITS = [
     { key: '', label: 'Tous les produits' },
     { key: 'destratification', label: 'Destratification', color: '#10b981' },
@@ -92,6 +112,37 @@ const Clients = () => {
   useEffect(() => {
     fetchClients();
   }, [filterStatut, filterProduit, filterCodeNAF, filterCodePostal, filterAssignedTo, pagination.page, pagination.limit, sortConfig]);
+
+  // Ajuster la largeur des barres de scroll pour correspondre au tableau
+  useEffect(() => {
+    const updateScrollBars = () => {
+      if (tableContainerRef.current) {
+        const tableWidth = tableContainerRef.current.querySelector('table')?.scrollWidth || 0;
+
+        if (topScrollRef.current) {
+          const scrollContent = topScrollRef.current.querySelector(`.${styles.scrollBarContent}`);
+          if (scrollContent) {
+            scrollContent.style.width = `${tableWidth}px`;
+          }
+        }
+
+        if (bottomScrollRef.current) {
+          const scrollContent = bottomScrollRef.current.querySelector(`.${styles.scrollBarContent}`);
+          if (scrollContent) {
+            scrollContent.style.width = `${tableWidth}px`;
+          }
+        }
+      }
+    };
+
+    // Mettre à jour après le chargement et à chaque changement
+    updateScrollBars();
+    window.addEventListener('resize', updateScrollBars);
+
+    return () => {
+      window.removeEventListener('resize', updateScrollBars);
+    };
+  }, [clients, loading]);
 
   const fetchStatuts = async () => {
     try {
@@ -593,7 +644,24 @@ const Clients = () => {
         </div>
       )}
 
-      <div className={styles.tableContainer}>
+      {/* Barre de scroll horizontal du haut (en dessous du header) */}
+      {!loading && filteredClients.length > 0 && (
+        <div className={styles.scrollBarContainer}>
+          <div
+            ref={topScrollRef}
+            className={styles.scrollBar}
+            onScroll={() => syncScroll(topScrollRef)}
+          >
+            <div className={styles.scrollBarContent} />
+          </div>
+        </div>
+      )}
+
+      <div
+        className={styles.tableContainer}
+        ref={tableContainerRef}
+        onScroll={() => syncScroll(tableContainerRef)}
+      >
         {loading ? (
           <div className={styles.loading}>Chargement...</div>
         ) : filteredClients.length === 0 ? (
@@ -778,6 +846,19 @@ const Clients = () => {
           </table>
         )}
       </div>
+
+      {/* Barre de scroll horizontal du bas (au-dessus de la pagination) */}
+      {!loading && filteredClients.length > 0 && (
+        <div className={styles.scrollBarContainer}>
+          <div
+            ref={bottomScrollRef}
+            className={styles.scrollBar}
+            onScroll={() => syncScroll(bottomScrollRef)}
+          >
+            <div className={styles.scrollBarContent} />
+          </div>
+        </div>
+      )}
 
       {pagination.total > 0 && (
         <div className={styles.pagination}>
